@@ -6,7 +6,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# --- PERUBAHAN: Impor fungsi top7 ---
+# Impor fungsi top7
 from markov_model import top7_markov, top7_markov_order2, top7_markov_hybrid
 from ai_model import (
     top7_lstm,
@@ -100,7 +100,6 @@ if st.button("🔮 Prediksi"):
     else:
         with st.spinner("⏳ Melakukan prediksi..."):
             result = None
-            # --- PERUBAHAN: Panggil fungsi top7 ---
             if metode == "Markov":
                 result, _ = top7_markov(df)
             elif metode == "Markov Order-2":
@@ -115,12 +114,11 @@ if st.button("🔮 Prediksi"):
         if result is None:
             st.error("❌ Gagal melakukan prediksi. Pastikan model AI sudah dilatih jika menggunakan metode tersebut.")
         else:
-            # --- PERUBAHAN: Teks judul diubah menjadi Top 7 ---
+            # --- PERUBAHAN 1: Tampilan hasil diubah per baris dengan label baru ---
             with st.expander("🎯 Hasil Prediksi Top 7 Digit", expanded=True):
-                col1, col2 = st.columns(2)
-                for i, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
-                    with (col1 if i % 2 == 0 else col2):
-                        st.markdown(f"**{label}:** {', '.join(map(str, result[i]))}")
+                labels = ["As", "Kop", "Kepala", "Ekor"]
+                for i, label in enumerate(labels):
+                    st.markdown(f"**{label}:** {', '.join(map(str, result[i]))}")
 
             if metode in ["LSTM AI", "Ensemble AI + Markov"]:
                 with st.spinner("🔢 Menghitung kombinasi 4D terbaik..."):
@@ -137,14 +135,16 @@ if st.button("🔮 Prediksi"):
             uji_df = df.tail(min(jumlah_uji, len(df)))
             total, benar = 0, 0
             akurasi_list = []
-            digit_acc = {"Ribuan": [], "Ratusan": [], "Puluhan": [], "Satuan": []}
+            
+            # --- PERUBAHAN 2: Label untuk akurasi diubah ---
+            labels_acc = ["As", "Kop", "Kepala", "Ekor"]
+            digit_acc = {label: [] for label in labels_acc}
 
             for i in range(len(uji_df)):
                 subset_df = df.iloc[:-(len(uji_df) - i)]
                 if len(subset_df) < 20:
                     continue
                 try:
-                    # --- PERUBAHAN: Panggil fungsi top7 untuk evaluasi ---
                     pred = (
                         top7_markov(subset_df)[0] if metode == "Markov" else
                         top7_markov_order2(subset_df) if metode == "Markov Order-2" else
@@ -157,7 +157,7 @@ if st.button("🔮 Prediksi"):
 
                     actual = f"{int(uji_df.iloc[i]['angka']):04d}"
                     skor = 0
-                    for j, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
+                    for j, label in enumerate(labels_acc):
                         if int(actual[j]) in pred[j]:
                             skor += 1
                             digit_acc[label].append(1)
