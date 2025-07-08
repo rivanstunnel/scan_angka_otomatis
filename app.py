@@ -7,7 +7,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import time
 from itertools import product
-import streamlit_extras.stylable_container as stx # Impor komponen yang dibutuhkan
 
 # Impor fungsi-fungsi dari file model
 from markov_model import (
@@ -32,58 +31,6 @@ def load_lottieurl(url):
     if r.status_code != 200:
         return None
     return r.json()
-
-# --- MODIFIKASI: Fungsi untuk membuat tombol Salin ---
-def copy_button_workaround(text_to_copy: str, button_text: str, key: str):
-    """
-    Membuat tombol yang bisa menyalin teks ke clipboard menggunakan HTML dan JavaScript.
-    """
-    # Escaping backticks and double quotes for safe injection into JS
-    js_text = text_to_copy.replace('\\', '\\\\').replace('"', '\\"').replace('`', '\\`')
-
-    st.components.v1.html(f"""
-    <button id='{key}' onclick='copyToClipboard()'>{button_text}</button>
-    <script>
-    function copyToClipboard() {{
-        navigator.clipboard.writeText(`{js_text}`).then(function() {{
-            var btn = document.getElementById('{key}');
-            btn.innerHTML = '✅ Tersalin!';
-            setTimeout(function() {{
-                btn.innerHTML = '{button_text}';
-            }}, 2000);
-        }}, function(err) {{
-            console.error('Async: Could not copy text: ', err);
-        }});
-    }}
-    </script>
-    <style>
-        #{key} {{
-            display: inline-flex;
-            -webkit-box-align: center;
-            align-items: center;
-            -webkit-box-pack: center;
-            justify-content: center;
-            font-weight: 400;
-            padding: 0.25rem 0.75rem;
-            border-radius: 0.5rem;
-            min-height: 38.4px;
-            margin: 0px;
-            line-height: 1.6;
-            color: inherit;
-            width: auto;
-            user-select: none;
-            background-color: rgb(14, 17, 23);
-            border: 1px solid rgba(250, 250, 250, 0.2);
-            cursor: pointer;
-        }}
-        #{key}:hover {{
-            border: 1px solid rgb(255, 75, 75);
-            color: rgb(255, 75, 75);
-        }}
-    </style>
-    """, height=50)
-# --- AKHIR MODIFIKASI ---
-
 
 lottie_predict = load_lottieurl("https://assets2.lottiefiles.com/packages/lf20_kkflmtur.json")
 st_lottie(lottie_predict, speed=1, height=150, key="prediksi")
@@ -162,11 +109,11 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
                 st.markdown(f"#### **{label}:** {', '.join(map(str, result[i]))}")
 
             st.divider()
-            with st.expander("⬇️ Tampilkan & Salin Hasil Kombinasi"):
+            with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
                 kombinasi_4d_list = ["".join(map(str, p)) for p in product(result[0], result[1], result[2], result[3])]
                 kombinasi_3d_list = ["".join(map(str, p)) for p in product(result[1], result[2], result[3])]
                 kombinasi_2d_list = ["".join(map(str, p)) for p in product(result[2], result[3])]
-                
+
                 separator = " * "
                 text_4d = separator.join(kombinasi_4d_list)
                 text_3d = separator.join(kombinasi_3d_list)
@@ -174,20 +121,18 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
 
                 tab4d, tab3d, tab2d = st.tabs([f"Kombinasi 4D ({len(kombinasi_4d_list)})", f"Kombinasi 3D ({len(kombinasi_3d_list)})", f"Kombinasi 2D ({len(kombinasi_2d_list)})"])
 
-                # --- MODIFIKASI: Menggunakan fungsi baru untuk tombol salin ---
                 with tab4d:
                     st.text_area("Hasil 4D (As-Kop-Kepala-Ekor)", text_4d, height=200, key="text_4d")
-                    copy_button_workaround(text_4d, "📋 Salin Hasil 4D", "copy4d")
+                    st.download_button("Unduh 4D.txt", text_4d, file_name=f"hasil_4d_{selected_lokasi.lower()}.txt")
 
                 with tab3d:
                     st.text_area("Hasil 3D (Kop-Kepala-Ekor)", text_3d, height=200, key="text_3d")
-                    copy_button_workaround(text_3d, "📋 Salin Hasil 3D", "copy3d")
+                    st.download_button("Unduh 3D.txt", text_3d, file_name=f"hasil_3d_{selected_lokasi.lower()}.txt")
 
                 with tab2d:
                     st.text_area("Hasil 2D (Kepala-Ekor)", text_2d, height=200, key="text_2d")
-                    copy_button_workaround(text_2d, "📋 Salin Hasil 2D", "copy2d")
-                # --- AKHIR MODIFIKASI ---
-
+                    st.download_button("Unduh 2D.txt", text_2d, file_name=f"hasil_2d_{selected_lokasi.lower()}.txt")
+            
             if metode in ["LSTM AI", "Ensemble AI + Markov"]:
                 with st.spinner("🔢 Menghitung kombinasi 4D terbaik..."):
                     top_komb = kombinasi_4d(df, lokasi=selected_lokasi, top_n=10, min_conf=min_conf, power=power)
