@@ -1,5 +1,3 @@
-# app.py
-
 import streamlit as st
 import pandas as pd
 import requests
@@ -132,12 +130,12 @@ if st.button("🔮 Prediksi Sekarang!"):
             st.error("❌ Gagal melakukan prediksi. Pastikan model AI sudah dilatih jika menggunakan metode AI.")
         else:
             st.subheader(f"🎯 Hasil Prediksi Top {top_n} Digit")
-            col1, col2, col3, col4 = st.columns(4)
-            kolom = [col1, col2, col3, col4]
-            for i, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
-                with kolom[i]:
-                    st.markdown(f"**{label}**")
-                    st.markdown(f"## {', '.join(map(str, result[i]))}")
+            
+            # --- MODIFIKASI: Mengubah label dan layout menjadi per baris ---
+            labels = ["As", "Kop", "Kepala", "Ekor"]
+            for i, label in enumerate(labels):
+                st.markdown(f"#### **{label}:** {', '.join(map(str, result[i]))}")
+            # --- AKHIR MODIFIKASI ---
 
             if metode in ["LSTM AI", "Ensemble AI + Markov"]:
                 with st.spinner("🔢 Menghitung kombinasi 4D terbaik..."):
@@ -155,7 +153,11 @@ if st.button("🔮 Prediksi Sekarang!"):
             uji_df = df.tail(min(jumlah_uji, len(df)))
             total, benar = 0, 0
             akurasi_list = []
-            digit_acc = {"Ribuan": [], "Ratusan": [], "Puluhan": [], "Satuan": []}
+            
+            # --- MODIFIKASI: Mengubah label di dictionary akurasi ---
+            labels = ["As", "Kop", "Kepala", "Ekor"]
+            digit_acc = {label: [] for label in labels}
+            # --- AKHIR MODIFIKASI ---
 
             for i in range(len(uji_df)):
                 subset_df = df.iloc[:-(len(uji_df) - i)]
@@ -178,7 +180,9 @@ if st.button("🔮 Prediksi Sekarang!"):
 
                     actual = f"{int(uji_df.iloc[i]['angka']):04d}"
                     skor = 0
-                    for j, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
+                    # --- MODIFIKASI: Menggunakan label baru di loop akurasi ---
+                    for j, label in enumerate(labels):
+                    # --- AKHIR MODIFIKASI ---
                         if int(actual[j]) in pred[j]:
                             skor += 1
                             digit_acc[label].append(1)
