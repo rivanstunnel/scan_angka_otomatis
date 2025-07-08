@@ -28,7 +28,7 @@ def load_lottieurl(url):
 lottie_predict = load_lottieurl("https://assets2.lottiefiles.com/packages/lf20_kkflmtur.json")
 st_lottie(lottie_predict, speed=1, height=150, key="prediksi")
 
-st.title("🔮 Prediksi 4D - AI & Markov")
+st.title("🔮 Analisis Angka 4D")
 
 # Sidebar
 hari_list = ["harian", "kemarin", "2hari", "3hari", "4hari", "5hari"]
