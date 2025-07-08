@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.pyc
+.env
+env.text
+
+# Model & Log Training
+/saved_models/
+/training_logs/
+*.h5
+*.csv
