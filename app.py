@@ -5,8 +5,6 @@ import os
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
-from itertools import product
-from streamlit_copy_button import copy_button # <-- PERUBAHAN BARU: Impor tombol salin
 
 # Impor fungsi top7
 from markov_model import top7_markov, top7_markov_order2, top7_markov_hybrid
@@ -116,51 +114,11 @@ if st.button("🔮 Prediksi"):
         if result is None:
             st.error("❌ Gagal melakukan prediksi. Pastikan model AI sudah dilatih jika menggunakan metode tersebut.")
         else:
+            # --- PERUBAHAN 1: Tampilan hasil diubah per baris dengan label baru ---
             with st.expander("🎯 Hasil Prediksi Top 7 Digit", expanded=True):
                 labels = ["As", "Kop", "Kepala", "Ekor"]
                 for i, label in enumerate(labels):
                     st.markdown(f"**{label}:** {', '.join(map(str, result[i]))}")
-
-            # --- PERUBAHAN BARU: Blok Angka Jadi 2D, 3D, 4D diperbarui ---
-            with st.expander("🔢 Angka Jadi 2D, 3D, 4D", expanded=True):
-                as_pred, kop_pred, kepala_pred, ekor_pred = result[0], result[1], result[2], result[3]
-
-                # --- Angka Jadi 2D ---
-                kombinasi_2d = product(kepala_pred, ekor_pred)
-                angka_jadi_2d_list = sorted(["".join(map(str, k)) for k in kombinasi_2d])
-                angka_jadi_2d_str = "*".join(angka_jadi_2d_list)
-                
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.markdown(f"**Angka Jadi 2D ({len(angka_jadi_2d_list)} kombinasi):**")
-                with col2:
-                    copy_button(angka_jadi_2d_str, "Salin Angka 2D")
-                st.code(angka_jadi_2d_str)
-
-                # --- Angka Jadi 3D ---
-                kombinasi_3d = product(kop_pred, kepala_pred, ekor_pred)
-                angka_jadi_3d_list = sorted(["".join(map(str, k)) for k in kombinasi_3d])
-                angka_jadi_3d_str = "*".join(angka_jadi_3d_list)
-
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.markdown(f"**Angka Jadi 3D ({len(angka_jadi_3d_list)} kombinasi):**")
-                with col2:
-                    copy_button(angka_jadi_3d_str, "Salin Angka 3D")
-                st.code(angka_jadi_3d_str)
-                
-                # --- Angka Jadi 4D ---
-                kombinasi_4d_jadi = product(as_pred, kop_pred, kepala_pred, ekor_pred)
-                angka_jadi_4d_list = sorted(["".join(map(str, k)) for k in kombinasi_4d_jadi])
-                angka_jadi_4d_str = "*".join(angka_jadi_4d_list)
-
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.markdown(f"**Angka Jadi 4D ({len(angka_jadi_4d_list)} kombinasi):**")
-                with col2:
-                    copy_button(angka_jadi_4d_str, "Salin Angka 4D")
-                st.code(angka_jadi_4d_str)
-            # --- Akhir Perubahan Baru ---
 
             if metode in ["LSTM AI", "Ensemble AI + Markov"]:
                 with st.spinner("🔢 Menghitung kombinasi 4D terbaik..."):
@@ -178,6 +136,7 @@ if st.button("🔮 Prediksi"):
             total, benar = 0, 0
             akurasi_list = []
             
+            # --- PERUBAHAN 2: Label untuk akurasi diubah ---
             labels_acc = ["As", "Kop", "Kepala", "Ekor"]
             digit_acc = {label: [] for label in labels_acc}
 
