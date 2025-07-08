@@ -11,7 +11,7 @@ from tensorflow.keras.utils import to_categorical
 import os
 import pandas as pd
 from itertools import product
-from markov_model import top6_markov
+from markov_model import top7_markov
 
 class PositionalEncoding(tf.keras.layers.Layer):
     def call(self, x):
