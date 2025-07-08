@@ -11,7 +11,7 @@ from tensorflow.keras.utils import to_categorical
 import os
 import pandas as pd
 from itertools import product
-# --- PERUBAHAN: Impor fungsi top7 ---
+# --- PERUBAHAN KRITIS: Impor fungsi top7, bukan top6 ---
 from markov_model import top7_markov
 
 class PositionalEncoding(tf.keras.layers.Layer):
@@ -68,13 +68,14 @@ def train_and_save_lstm(df, lokasi, window_size=5):
     if len(df) < window_size + 5:
         return
     X, y_all = preprocess_data(df, window_size=window_size)
-    if X.shape[0] == 0: # Pastikan ada data untuk dilatih
+    if X.shape[0] == 0:
         print("Tidak ada data valid untuk training setelah preprocessing.")
         return
     os.makedirs("saved_models", exist_ok=True)
     os.makedirs("training_logs", exist_ok=True)
     for i in range(4):
         y = y_all[i]
+        if y.shape[0] == 0: continue
         model = build_model(input_len=X.shape[1])
         log_path = f"training_logs/history_{lokasi.lower().replace(' ', '_')}_digit{i}.csv"
         callbacks = [
@@ -87,7 +88,6 @@ def train_and_save_lstm(df, lokasi, window_size=5):
 def model_exists(lokasi):
     return all(os.path.exists(f"saved_models/{lokasi.lower().replace(' ', '_')}_digit{i}.h5") for i in range(4))
 
-# --- PERUBAHAN: Fungsi diubah menjadi top7 ---
 def top7_lstm(df, lokasi=None, return_probs=False, temperature=0.5):
     X, _ = preprocess_data(df)
     if X.shape[0] == 0:
@@ -101,7 +101,7 @@ def top7_lstm(df, lokasi=None, return_probs=False, temperature=0.5):
             model = load_model(path, compile=False, custom_objects={"PositionalEncoding": PositionalEncoding})
             pred = model.predict(X, verbose=0)
             avg = np.mean(pred, axis=0)
-            top7 = avg.argsort()[-7:][::-1] # Ambil 7 digit teratas
+            top7 = avg.argsort()[-7:][::-1]
             results.append(list(top7))
             probs.append(avg[top7])
         except Exception:
@@ -109,7 +109,6 @@ def top7_lstm(df, lokasi=None, return_probs=False, temperature=0.5):
     return (results, probs) if return_probs else results
 
 def kombinasi_4d(df, lokasi, top_n=10, min_conf=0.0001, power=1.5, mode='product'):
-    # --- PERUBAHAN: Panggil fungsi top7 ---
     result, probs = top7_lstm(df, lokasi=lokasi, return_probs=True)
     if result is None or probs is None:
         return []
@@ -133,16 +132,15 @@ def kombinasi_4d(df, lokasi, top_n=10, min_conf=0.0001, power=1.5, mode='product
     topk = sorted(scores, key=lambda x: -x[1])[:top_n]
     return topk
 
-# --- PERUBAHAN: Fungsi diubah menjadi top7 ---
 def top7_ensemble(df, lokasi):
     lstm_result = top7_lstm(df, lokasi=lokasi)
     markov_result, _ = top7_markov(df)
     if lstm_result is None or markov_result is None:
-        return None
+        return lstm_result or markov_result
     ensemble = []
     for i in range(4):
         combined = lstm_result[i] + markov_result[i]
         freq = {x: combined.count(x) for x in set(combined)}
-        top7 = sorted(freq.items(), key=lambda x: -x[1])[:7] # Ambil 7 digit teratas
+        top7 = sorted(freq.items(), key=lambda x: -x[1])[:7]
         ensemble.append([x[0] for x in top7])
     return ensemble
