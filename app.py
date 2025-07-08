@@ -6,12 +6,13 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from markov_model import top6_markov, top6_markov_order2, top6_markov_hybrid
+# --- PERUBAHAN: Impor fungsi top7 ---
+from markov_model import top7_markov, top7_markov_order2, top7_markov_hybrid
 from ai_model import (
-    top6_lstm,
+    top7_lstm,
     train_and_save_lstm,
     kombinasi_4d,
-    top6_ensemble,
+    top7_ensemble,
     model_exists
 )
 from lokasi_list import lokasi_list
@@ -69,7 +70,7 @@ if selected_lokasi and selected_hari:
 df = pd.DataFrame({"angka": angka_list})
 
 # Manajemen Model LSTM
-if metode == "LSTM AI":
+if metode in ["LSTM AI", "Ensemble AI + Markov"]:
     with st.expander("⚙️ Manajemen Model LSTM"):
         for i in range(4):
             model_path = f"saved_models/{selected_lokasi.lower().replace(' ', '_')}_digit{i}.h5"
@@ -84,11 +85,13 @@ if metode == "LSTM AI":
                     if st.button(f"🗑 Hapus Digit-{i}", key=f"hapus_digit_{i}"):
                         os.remove(model_path)
                         st.warning(f"✅ Model Digit-{i} dihapus.")
+                        st.experimental_rerun()
 
         if st.button("📚 Latih & Simpan Semua Model"):
             with st.spinner("🔄 Melatih semua model per digit..."):
                 train_and_save_lstm(df, selected_lokasi)
             st.success("✅ Semua model berhasil dilatih dan disimpan.")
+            st.experimental_rerun()
 
 # Tombol Prediksi
 if st.button("🔮 Prediksi"):
@@ -97,21 +100,23 @@ if st.button("🔮 Prediksi"):
     else:
         with st.spinner("⏳ Melakukan prediksi..."):
             result = None
+            # --- PERUBAHAN: Panggil fungsi top7 ---
             if metode == "Markov":
-                result, _ = top6_markov(df)
+                result, _ = top7_markov(df)
             elif metode == "Markov Order-2":
-                result = top6_markov_order2(df)
+                result = top7_markov_order2(df)
             elif metode == "Markov Gabungan":
-                result = top6_markov_hybrid(df)
+                result = top7_markov_hybrid(df)
             elif metode == "LSTM AI":
-                result = top6_lstm(df, lokasi=selected_lokasi)
+                result = top7_lstm(df, lokasi=selected_lokasi)
             elif metode == "Ensemble AI + Markov":
-                result = top6_ensemble(df, lokasi=selected_lokasi)
+                result = top7_ensemble(df, lokasi=selected_lokasi)
 
         if result is None:
-            st.error("❌ Gagal melakukan prediksi.")
+            st.error("❌ Gagal melakukan prediksi. Pastikan model AI sudah dilatih jika menggunakan metode tersebut.")
         else:
-            with st.expander("🎯 Hasil Prediksi Top 6 Digit"):
+            # --- PERUBAHAN: Teks judul diubah menjadi Top 7 ---
+            with st.expander("🎯 Hasil Prediksi Top 7 Digit", expanded=True):
                 col1, col2 = st.columns(2)
                 for i, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
                     with (col1 if i % 2 == 0 else col2):
@@ -139,12 +144,13 @@ if st.button("🔮 Prediksi"):
                 if len(subset_df) < 20:
                     continue
                 try:
+                    # --- PERUBAHAN: Panggil fungsi top7 untuk evaluasi ---
                     pred = (
-                        top6_markov(subset_df)[0] if metode == "Markov" else
-                        top6_markov_order2(subset_df) if metode == "Markov Order-2" else
-                        top6_markov_hybrid(subset_df) if metode == "Markov Gabungan" else
-                        top6_lstm(subset_df, lokasi=selected_lokasi) if metode == "LSTM AI" else
-                        top6_ensemble(subset_df, lokasi=selected_lokasi)
+                        top7_markov(subset_df)[0] if metode == "Markov" else
+                        top7_markov_order2(subset_df) if metode == "Markov Order-2" else
+                        top7_markov_hybrid(subset_df) if metode == "Markov Gabungan" else
+                        top7_lstm(subset_df, lokasi=selected_lokasi) if metode == "LSTM AI" else
+                        top7_ensemble(subset_df, lokasi=selected_lokasi)
                     )
                     if pred is None:
                         continue
