@@ -1,216 +1,177 @@
-import streamlit as st
-import pandas as pd
-import requests
-import os
 import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-from markov_model import top6_markov, top6_markov_order2, top6_markov_hybrid
-from ai_model import (
-    top6_model,
-    train_and_save_model,
-    kombinasi_4d,
-    top6_ensemble,
-    model_exists
+import tensorflow as tf
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.layers import (
+    Input, Embedding, Bidirectional, LSTM, Dropout, Dense,
+    LayerNormalization, MultiHeadAttention, GlobalAveragePooling1D
 )
-from lokasi_list import lokasi_list
-from streamlit_lottie import st_lottie
+from tensorflow.keras.callbacks import CSVLogger, EarlyStopping
+from tensorflow.keras.utils import to_categorical
+import os
+import pandas as pd
+from itertools import product
+from markov_model import top6_markov
 
-st.set_page_config(page_title="Prediksi Togel AI", layout="wide")
+class PositionalEncoding(tf.keras.layers.Layer):
+    def call(self, x):
+        seq_len = tf.shape(x)[1]
+        d_model = tf.shape(x)[2]
+        pos = tf.cast(tf.range(seq_len)[:, tf.newaxis], dtype=tf.float32)
+        i = tf.cast(tf.range(d_model)[tf.newaxis, :], dtype=tf.float32)
+        angle_rates = 1 / tf.pow(10000.0, (2 * (i // 2)) / tf.cast(d_model, tf.float32))
+        angle_rads = pos * angle_rates
+        sines = tf.math.sin(angle_rads[:, 0::2])
+        cosines = tf.math.cos(angle_rads[:, 1::2])
+        pos_encoding = tf.concat([sines, cosines], axis=-1)
+        pos_encoding = tf.expand_dims(pos_encoding, 0)
+        return x + tf.cast(pos_encoding, tf.float32)
 
-def load_lottieurl(url):
-    r = requests.get(url)
-    if r.status_code != 200:
+def preprocess_data(df, window_size=5):
+    if len(df) < window_size + 1:
+        return np.array([]), [np.array([]) for _ in range(4)]
+    sequences, targets = [], [[] for _ in range(4)]
+    angka = df["angka"].values
+    for i in range(len(angka) - window_size):
+        window = angka[i:i+window_size]
+        if any(len(x) != 4 or not x.isdigit() for x in window):
+            continue
+        seq = [int(d) for num in window[:-1] for d in f"{int(num):04d}"]
+        sequences.append(seq)
+        target_digits = [int(d) for d in f"{int(window[-1]):04d}"]
+        for j in range(4):
+            targets[j].append(to_categorical(target_digits[j], num_classes=10))
+    X = np.array(sequences)
+    y = [np.array(t) for t in targets]
+    return X, y
+
+def build_lstm_model(input_len, embed_dim=32, lstm_units=128, attention_heads=4, temperature=0.5):
+    inputs = Input(shape=(input_len,))
+    x = Embedding(input_dim=10, output_dim=embed_dim)(inputs)
+    x = PositionalEncoding()(x)
+    x = Bidirectional(LSTM(lstm_units, return_sequences=True))(x)
+    x = LayerNormalization()(x)
+    x = Dropout(0.3)(x)
+    x = Bidirectional(LSTM(lstm_units, return_sequences=True))(x)
+    x = LayerNormalization()(x)
+    x = MultiHeadAttention(num_heads=attention_heads, key_dim=embed_dim)(x, x)
+    x = Dropout(0.2)(x)
+    x = GlobalAveragePooling1D()(x)
+    x = Dense(512, activation='relu')(x)
+    x = Dropout(0.3)(x)
+    x = Dense(128, activation='relu')(x)
+    logits = Dense(10)(x)
+    outputs = tf.keras.layers.Activation('softmax')(logits / temperature)
+    model = Model(inputs, outputs)
+    model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
+    return model
+
+def build_transformer_model(input_len, embed_dim=32, heads=4, temperature=0.5):
+    inputs = Input(shape=(input_len,))
+    x = Embedding(input_dim=10, output_dim=embed_dim)(inputs)
+    x = PositionalEncoding()(x)
+    for _ in range(2):
+        attn = MultiHeadAttention(num_heads=heads, key_dim=embed_dim)(x, x)
+        x = LayerNormalization()(x + attn)
+        ff = Dense(embed_dim, activation='relu')(x)
+        x = LayerNormalization()(x + ff)
+    x = GlobalAveragePooling1D()(x)
+    x = Dense(128, activation='relu')(x)
+    x = Dropout(0.3)(x)
+    logits = Dense(10)(x)
+    outputs = tf.keras.layers.Activation('softmax')(logits / temperature)
+    model = Model(inputs, outputs)
+    model.compile(optimizer="adam", loss="categorical_crossentropy", metrics=["accuracy"])
+    return model
+
+def train_and_save_model(df, lokasi, window_size=5, model_type="lstm"):
+    if len(df) < window_size + 5:
+        return
+    X, y_all = preprocess_data(df, window_size=window_size)
+    if X.shape[0] == 0:
+        return
+    os.makedirs("saved_models", exist_ok=True)
+    os.makedirs("training_logs", exist_ok=True)
+    for i in range(4):
+        y = y_all[i]
+        model = (
+            build_transformer_model(X.shape[1]) if model_type == "transformer"
+            else build_lstm_model(X.shape[1])
+        )
+        suffix = f"{model_type}"
+        log_path = f"training_logs/history_{lokasi.lower().replace(' ', '_')}_digit{i}_{suffix}.csv"
+        callbacks = [
+            CSVLogger(log_path),
+            EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+        ]
+        model.fit(X, y, epochs=50, batch_size=16, verbose=0, validation_split=0.2, callbacks=callbacks)
+        model.save(f"saved_models/{lokasi.lower().replace(' ', '_')}_digit{i}_{suffix}.h5")
+
+def model_exists(lokasi, model_type="lstm"):
+    return all(os.path.exists(f"saved_models/{lokasi.lower().replace(' ', '_')}_digit{i}_{model_type}.h5") for i in range(4))
+
+def top6_model(df, lokasi=None, model_type="lstm", return_probs=False, temperature=0.5):
+    X, _ = preprocess_data(df)
+    if X.shape[0] == 0:
         return None
-    return r.json()
+    results, probs = [], []
+    for i in range(4):
+        path = f"saved_models/{lokasi.lower().replace(' ', '_')}_digit{i}_{model_type}.h5"
+        if not os.path.exists(path):
+            return None
+        try:
+            model = load_model(path, compile=False, custom_objects={"PositionalEncoding": PositionalEncoding})
+            if model.input_shape[1] != X.shape[1]:
+                return None
+            pred = model.predict(X, verbose=0)
+            avg = np.mean(pred, axis=0)
+            avg /= avg.sum()  # Confidence normalization
+            top6 = avg.argsort()[-6:][::-1]
+            results.append(list(top6))
+            probs.append(avg[top6])
+        except Exception as e:
+            print(f"[{model_type.upper()} ERROR digit {i}] {e}")
+            return None
+    return (results, probs) if return_probs else results
 
-lottie_predict = load_lottieurl("https://assets2.lottiefiles.com/packages/lf20_kkflmtur.json")
-st_lottie(lottie_predict, speed=1, height=150, key="prediksi")
-
-st.title("🔮 Prediksi 4D - AI & Markov")
-
-# Sidebar
-hari_list = ["harian", "kemarin", "2hari", "3hari", "4hari", "5hari"]
-metode_list = ["Markov", "Markov Order-2", "Markov Gabungan", "LSTM AI", "Ensemble AI + Markov"]
-model_type = "lstm"
-
-with st.sidebar:
-    st.header("⚙️ Pengaturan")
-    selected_lokasi = st.selectbox("🌍 Pilih Pasaran", lokasi_list)
-    selected_hari = st.selectbox("📅 Pilih Hari", hari_list)
-    putaran = st.slider("🔁 Jumlah Putaran", 1, 1000, 100)
-    jumlah_uji = st.number_input("📊 Data Uji Akurasi", min_value=1, max_value=200, value=10)
-    metode = st.selectbox("🧠 Metode Prediksi", metode_list)
-
-    min_conf = 0.005
-    power = 1.5
-    temperature = 0.5
-    voting_mode = "product"
-    model_type = "lstm"
-
-    if metode in ["LSTM AI", "Ensemble AI + Markov"]:
-        min_conf = st.slider("🔎 Minimum Confidence", 0.0001, 0.01, 0.0005, step=0.0001, format="%.4f")
-        power = st.slider("📈 Confidence Power", 0.5, 3.0, 1.5, step=0.1)
-        temperature = st.slider("🌡️ Temperature Scaling", 0.1, 2.0, 0.5, step=0.1)
-        voting_mode = st.selectbox("⚖️ Kombinasi Mode", ["product", "average"])
-        use_transformer = st.checkbox("🧠 Gunakan Transformer")
-        model_type = "transformer" if use_transformer else "lstm"
-
-# Ambil Data
-angka_list = []
-riwayat_input = ""
-if selected_lokasi and selected_hari:
-    try:
-        with st.spinner("🔄 Mengambil data dari API..."):
-            url = f"https://wysiwygscan.com/api?pasaran={selected_lokasi.lower()}&hari={selected_hari}&putaran={putaran}&format=json&urut=asc"
-            headers = {"Authorization": "Bearer 6705327a2c9a9135f2c8fbad19f09b46"}
-            response = requests.get(url, headers=headers)
-            data = response.json()
-            angka_list = [item["result"] for item in data.get("data", []) if len(item["result"]) == 4 and item["result"].isdigit()]
-            riwayat_input = "\n".join(angka_list)
-            st.success(f"✅ {len(angka_list)} angka berhasil diambil.")
-            with st.expander("📥 Lihat Data"):
-                st.code(riwayat_input, language="text")
-    except Exception as e:
-        st.error(f"❌ Gagal ambil data API: {e}")
-
-df = pd.DataFrame({"angka": angka_list})
-
-# Manajemen Model
-if metode == "LSTM AI":
-    with st.expander("⚙️ Manajemen Model"):
+def kombinasi_4d(df, lokasi, model_type="lstm", top_n=10, min_conf=0.0001, power=1.5, mode='product'):
+    result, probs = top6_model(df, lokasi=lokasi, model_type=model_type, return_probs=True)
+    if result is None or probs is None:
+        return []
+    combinations = list(product(*result))
+    scores = []
+    for combo in combinations:
+        digit_scores = []
+        valid = True
         for i in range(4):
-            model_path = f"saved_models/{selected_lokasi.lower().replace(' ', '_')}_digit{i}_{model_type}.h5"
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                if os.path.exists(model_path):
-                    st.info(f"📂 Model Digit-{i} tersedia ({model_type}).")
-                else:
-                    st.warning(f"⚠️ Model Digit-{i} belum tersedia.")
-            with col2:
-                if os.path.exists(model_path):
-                    if st.button(f"🗑 Hapus Digit-{i}", key=f"hapus_digit_{i}"):
-                        os.remove(model_path)
-                        st.warning(f"✅ Model Digit-{i} dihapus.")
+            try:
+                idx = result[i].index(combo[i])
+                digit_scores.append(probs[i][idx] ** power)
+            except:
+                valid = False
+                break
+        if not valid:
+            continue
+        score = np.prod(digit_scores) if mode == 'product' else np.mean(digit_scores)
+        if score >= min_conf:
+            scores.append(("".join(map(str, combo)), score))
+    topk = sorted(scores, key=lambda x: -x[1])[:top_n]
+    return topk
 
-        if st.button("📚 Latih & Simpan Semua Model"):
-            with st.spinner(f"🔄 Melatih semua model per digit ({model_type})..."):
-                train_and_save_model(df, selected_lokasi, model_type=model_type)
-            st.success("✅ Semua model berhasil dilatih dan disimpan.")
-
-# Tombol Prediksi
-if st.button("🔮 Prediksi"):
-    if len(df) < 11:
-        st.warning("❌ Minimal 11 data diperlukan.")
-    else:
-        with st.spinner("⏳ Melakukan prediksi..."):
-            result, probs = None, None
-            if metode == "Markov":
-                result, _ = top6_markov(df)
-            elif metode == "Markov Order-2":
-                result = top6_markov_order2(df)
-            elif metode == "Markov Gabungan":
-                result = top6_markov_hybrid(df)
-            elif metode == "LSTM AI":
-                pred = top6_model(df, lokasi=selected_lokasi, model_type=model_type, return_probs=True, temperature=temperature)
-                if pred:
-                    result, probs = pred
-            elif metode == "Ensemble AI + Markov":
-                pred = top6_model(df, lokasi=selected_lokasi, model_type=model_type, return_probs=True, temperature=temperature)
-                if pred:
-                    result, probs = pred
-                    markov_result, _ = top6_markov(df)
-                    if markov_result:
-                        ensemble = []
-                        for i in range(4):
-                            combined = result[i] + markov_result[i]
-                            freq = {x: combined.count(x) for x in set(combined)}
-                            top6 = sorted(freq.items(), key=lambda x: -x[1])[:6]
-                            ensemble.append([x[0] for x in top6])
-                        result = ensemble
-
-        if result is None:
-            st.error("❌ Gagal melakukan prediksi.")
-        else:
-            with st.expander("🎯 Hasil Prediksi Top 6 Digit"):
-                col1, col2 = st.columns(2)
-                for i, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
-                    with (col1 if i % 2 == 0 else col2):
-                        st.markdown(f"**{label}:** {', '.join(map(str, result[i]))}")
-
-            if metode in ["LSTM AI", "Ensemble AI + Markov"] and probs:
-                with st.expander("📊 Confidence Bar per Digit"):
-                    for i, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
-                        st.markdown(f"**🔢 {label}**")
-                        digit_data = pd.DataFrame({
-                            "Digit": [str(d) for d in result[i]],
-                            "Confidence": probs[i]
-                        }).sort_values(by="Confidence", ascending=True)
-                        st.bar_chart(digit_data.set_index("Digit"))
-
-            if metode in ["LSTM AI", "Ensemble AI + Markov"]:
-                with st.spinner("🔢 Menghitung kombinasi 4D terbaik..."):
-                    top_komb = kombinasi_4d(df, lokasi=selected_lokasi, model_type=model_type,
-                                            top_n=10, min_conf=min_conf, power=power, mode=voting_mode)
-                    if top_komb:
-                        with st.expander("💡 Simulasi Kombinasi 4D Terbaik"):
-                            sim_col = st.columns(2)
-                            for i, (komb, score) in enumerate(top_komb):
-                                with sim_col[i % 2]:
-                                    st.markdown(f"`{komb}` - ⚡️ Confidence: `{score:.4f}`")
-
-        # Evaluasi Akurasi
-        with st.spinner("📏 Menghitung akurasi..."):
-            uji_df = df.tail(min(jumlah_uji, len(df)))
-            total, benar = 0, 0
-            akurasi_list = []
-            digit_acc = {"Ribuan": [], "Ratusan": [], "Puluhan": [], "Satuan": []}
-
-            for i in range(len(uji_df)):
-                subset_df = df.iloc[:-(len(uji_df) - i)]
-                if len(subset_df) < 20:
-                    continue
-                try:
-                    pred = (
-                        top6_markov(subset_df)[0] if metode == "Markov" else
-                        top6_markov_order2(subset_df) if metode == "Markov Order-2" else
-                        top6_markov_hybrid(subset_df) if metode == "Markov Gabungan" else
-                        top6_model(subset_df, lokasi=selected_lokasi, model_type=model_type) if metode == "LSTM AI" else
-                        top6_ensemble(subset_df, lokasi=selected_lokasi, model_type=model_type)
-                    )
-                    if pred is None:
-                        continue
-                    actual = f"{int(uji_df.iloc[i]['angka']):04d}"
-                    skor = 0
-                    for j, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
-                        if int(actual[j]) in pred[j]:
-                            skor += 1
-                            digit_acc[label].append(1)
-                        else:
-                            digit_acc[label].append(0)
-                    total += 4
-                    benar += skor
-                    akurasi_list.append(skor / 4 * 100)
-                except:
-                    continue
-
-            if total > 0:
-                st.success(f"📈 Akurasi {metode}: {benar / total * 100:.2f}%")
-                with st.expander("📊 Grafik Akurasi"):
-                    st.line_chart(pd.DataFrame({"Akurasi (%)": akurasi_list}))
-                with st.expander("🔥 Heatmap Akurasi per Digit"):
-                    heat_df = pd.DataFrame({
-                        k: [sum(v) / len(v) * 100 if v else 0]
-                        for k, v in digit_acc.items()
-                    })
-                    fig, ax = plt.subplots()
-                    sns.heatmap(heat_df, annot=True, fmt=".1f", cmap="YlGnBu", ax=ax)
-                    st.pyplot(fig)
-                st.markdown("### 🧠 Akurasi Top-1 per Digit")
-                akurasi_digit_1 = {
-                    k: f"{sum(v)/len(v)*100:.2f}%" if v else "0.00%" for k, v in digit_acc.items()
-                }
-                st.table(pd.DataFrame(akurasi_digit_1.items(), columns=["Digit", "Top-1 Akurasi"]))
-            else:
-                st.warning("⚠️ Tidak cukup data untuk evaluasi akurasi.")
+def top6_ensemble(df, lokasi, model_type="lstm", lstm_weight=0.6, markov_weight=0.4):
+    lstm_result = top6_model(df, lokasi=lokasi, model_type=model_type)
+    markov_result, _ = top6_markov(df)
+    if lstm_result is None or markov_result is None:
+        return None
+    ensemble = []
+    for i in range(4):
+        all_digits = lstm_result[i] + markov_result[i]
+        scores = {}
+        for digit in all_digits:
+            scores[digit] = scores.get(digit, 0)
+            if digit in lstm_result[i]:
+                scores[digit] += lstm_weight
+            if digit in markov_result[i]:
+                scores[digit] += markov_weight
+        top6 = sorted(scores.items(), key=lambda x: -x[1])[:6]
+        ensemble.append([x[0] for x in top6])
+    return ensemble
