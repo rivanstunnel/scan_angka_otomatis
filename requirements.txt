@@ -1,9 +1,9 @@
 streamlit
 pandas
-numpy
-tensorflow-cpu
+numpy==1.26.4
 scikit-learn
 requests
 matplotlib
 streamlit_lottie
 seaborn
+tensorflow-cpu==2.16.2
