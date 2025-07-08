@@ -1,9 +1,9 @@
 streamlit
 pandas
 requests
-numpy
+numpy==1.26.4
 seaborn
 matplotlib
 streamlit-lottie
-tensorflow
-streamlit-extras
+tensorflow==2.15.0
+keras==2.15.0
