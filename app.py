@@ -6,12 +6,13 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from markov_model import top6_markov, top6_markov_order2, top6_markov_hybrid
+# Pastikan Anda telah mengubah fungsi di file-file ini untuk menghasilkan Top 7
+from markov_model import top7_markov, top7_markov_order2, top7_markov_hybrid
 from ai_model import (
-    top6_lstm,
+    top7_lstm,
     train_and_save_lstm,
     kombinasi_4d,
-    top6_ensemble,
+    top7_ensemble,
     model_exists
 )
 from lokasi_list import lokasi_list
@@ -98,33 +99,35 @@ if st.button("🔮 Prediksi"):
         with st.spinner("⏳ Melakukan prediksi..."):
             result, probs = None, None
             if metode == "Markov":
-                result, _ = top6_markov(df)
+                result, _ = top7_markov(df)
             elif metode == "Markov Order-2":
-                result = top6_markov_order2(df)
+                result = top7_markov_order2(df)
             elif metode == "Markov Gabungan":
-                result = top6_markov_hybrid(df)
+                result = top7_markov_hybrid(df)
             elif metode == "LSTM AI":
-                pred = top6_lstm(df, lokasi=selected_lokasi, return_probs=True)
+                pred = top7_lstm(df, lokasi=selected_lokasi, return_probs=True)
                 if pred:
                     result, probs = pred
             elif metode == "Ensemble AI + Markov":
-                pred = top6_lstm(df, lokasi=selected_lokasi, return_probs=True)
+                pred = top7_lstm(df, lokasi=selected_lokasi, return_probs=True)
                 if pred:
                     result, probs = pred
-                    markov_result, _ = top6_markov(df)
+                    markov_result, _ = top7_markov(df)
                     if markov_result:
                         ensemble = []
                         for i in range(4):
                             combined = result[i] + markov_result[i]
                             freq = {x: combined.count(x) for x in set(combined)}
-                            top6 = sorted(freq.items(), key=lambda x: -x[1])[:6]
-                            ensemble.append([x[0] for x in top6])
+                            # --- PERUBAHAN DI SINI ---
+                            top7 = sorted(freq.items(), key=lambda x: -x[1])[:7]
+                            ensemble.append([x[0] for x in top7])
                         result = ensemble
 
         if result is None:
             st.error("❌ Gagal melakukan prediksi.")
         else:
-            with st.expander("🎯 Hasil Prediksi Top 6 Digit"):
+            # --- PERUBAHAN DI SINI ---
+            with st.expander("🎯 Hasil Prediksi Top 7 Digit"):
                 col1, col2 = st.columns(2)
                 for i, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
                     with (col1 if i % 2 == 0 else col2):
@@ -150,61 +153,62 @@ if st.button("🔮 Prediksi"):
                                 with sim_col[i % 2]:
                                     st.markdown(f"`{komb}` - ⚡️ Confidence: `{score:.4f}`")
 
-        # Evaluasi Akurasi
-        with st.spinner("📏 Menghitung akurasi..."):
-            uji_df = df.tail(min(jumlah_uji, len(df)))
-            total, benar = 0, 0
-            akurasi_list = []
-            digit_acc = {"Ribuan": [], "Ratusan": [], "Puluhan": [], "Satuan": []}
+            # Evaluasi Akurasi
+            with st.spinner("📏 Menghitung akurasi..."):
+                uji_df = df.tail(min(jumlah_uji, len(df)))
+                total, benar = 0, 0
+                akurasi_list = []
+                digit_acc = {"Ribuan": [], "Ratusan": [], "Puluhan": [], "Satuan": []}
 
-            for i in range(len(uji_df)):
-                subset_df = df.iloc[:-(len(uji_df) - i)]
-                if len(subset_df) < 20:
-                    continue
-                try:
-                    pred = (
-                        top6_markov(subset_df)[0] if metode == "Markov" else
-                        top6_markov_order2(subset_df) if metode == "Markov Order-2" else
-                        top6_markov_hybrid(subset_df) if metode == "Markov Gabungan" else
-                        top6_lstm(subset_df, lokasi=selected_lokasi) if metode == "LSTM AI" else
-                        top6_ensemble(subset_df, lokasi=selected_lokasi)
-                    )
-                    if pred is None:
+                for i in range(len(uji_df)):
+                    subset_df = df.iloc[:-(len(uji_df) - i)]
+                    if len(subset_df) < 20:
                         continue
-                    actual = f"{int(uji_df.iloc[i]['angka']):04d}"
-                    skor = 0
-                    for j, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
-                        if int(actual[j]) in pred[j]:
-                            skor += 1
-                            digit_acc[label].append(1)
-                        else:
-                            digit_acc[label].append(0)
-                    total += 4
-                    benar += skor
-                    akurasi_list.append(skor / 4 * 100)
-                except:
-                    continue
+                    try:
+                        # --- PERUBAHAN DI SINI ---
+                        pred = (
+                            top7_markov(subset_df)[0] if metode == "Markov" else
+                            top7_markov_order2(subset_df) if metode == "Markov Order-2" else
+                            top7_markov_hybrid(subset_df) if metode == "Markov Gabungan" else
+                            top7_lstm(subset_df, lokasi=selected_lokasi) if metode == "LSTM AI" else
+                            top7_ensemble(subset_df, lokasi=selected_lokasi)
+                        )
+                        if pred is None:
+                            continue
+                        actual = f"{int(uji_df.iloc[i]['angka']):04d}"
+                        skor = 0
+                        for j, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
+                            if int(actual[j]) in pred[j]:
+                                skor += 1
+                                digit_acc[label].append(1)
+                            else:
+                                digit_acc[label].append(0)
+                        total += 4
+                        benar += skor
+                        akurasi_list.append(skor / 4 * 100)
+                    except:
+                        continue
 
-            if total > 0:
-                st.success(f"📈 Akurasi {metode}: {benar / total * 100:.2f}%")
+                if total > 0:
+                    st.success(f"📈 Akurasi {metode}: {benar / total * 100:.2f}%")
 
-                with st.expander("📊 Grafik Akurasi"):
-                    st.line_chart(pd.DataFrame({"Akurasi (%)": akurasi_list}))
+                    with st.expander("📊 Grafik Akurasi"):
+                        st.line_chart(pd.DataFrame({"Akurasi (%)": akurasi_list}))
 
-                with st.expander("🔥 Heatmap Akurasi per Digit"):
-                    heat_df = pd.DataFrame({
-                        k: [sum(v) / len(v) * 100 if v else 0]
-                        for k, v in digit_acc.items()
-                    })
-                    fig, ax = plt.subplots()
-                    sns.heatmap(heat_df, annot=True, fmt=".1f", cmap="YlGnBu", ax=ax)
-                    st.pyplot(fig)
-
-                # ✅ Tambahan: Akurasi Top-1 per Digit
-                st.markdown("### 🧠 Akurasi Top-1 per Digit")
-                akurasi_digit_1 = {
-                    k: f"{sum(v)/len(v)*100:.2f}%" if v else "0.00%" for k, v in digit_acc.items()
-                }
-                st.table(pd.DataFrame(akurasi_digit_1.items(), columns=["Digit", "Top-1 Akurasi"]))
-            else:
-                st.warning("⚠️ Tidak cukup data untuk evaluasi akurasi.")
+                    with st.expander("🔥 Heatmap Akurasi per Digit"):
+                        heat_df = pd.DataFrame({
+                            k: [sum(v) / len(v) * 100 if v else 0]
+                            for k, v in digit_acc.items()
+                        })
+                        fig, ax = plt.subplots()
+                        sns.heatmap(heat_df, annot=True, fmt=".1f", cmap="YlGnBu", ax=ax)
+                        st.pyplot(fig)
+                    
+                    # ✅ Tambahan: Akurasi Top-1 per Digit (sekarang menjadi akurasi Top-7)
+                    st.markdown("### 🧠 Akurasi Top-7 per Digit")
+                    akurasi_digit_7 = {
+                        k: f"{sum(v)/len(v)*100:.2f}%" if v else "0.00%" for k, v in digit_acc.items()
+                    }
+                    st.table(pd.DataFrame(akurasi_digit_7.items(), columns=["Digit", "Top-7 Akurasi"]))
+                else:
+                    st.warning("⚠️ Tidak cukup data untuk evaluasi akurasi.")
