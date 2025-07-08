@@ -36,6 +36,12 @@ st_lottie(lottie_predict, speed=1, height=150, key="prediksi")
 
 st.title("🔮 Prediksi 4D - AI & Markov")
 
+# --- MODIFIKASI: Definisi list dipindahkan ke sini ---
+# Mendefinisikan list sebelum digunakan di dalam sidebar
+hari_list = ["harian", "kemarin", "2hari", "3hari", "4hari", "5hari"]
+metode_list = ["Markov", "Markov Order-2", "Markov Gabungan", "LSTM AI", "Ensemble AI + Markov"]
+# --- AKHIR MODIFIKASI ---
+
 # --- Sidebar ---
 with st.sidebar:
     st.header("⚙️ Pengaturan")
@@ -53,15 +59,12 @@ with st.sidebar:
         min_conf = st.slider("🔎 Minimum Confidence", 0.0001, 0.001, 0.0005, step=0.0001, format="%.4f")
         power = st.slider("📈 Confidence Weight Power", 0.5, 3.0, 1.5, step=0.1)
 
-    # --- MODIFIKASI: Tombol Cari Putaran Terbaik dipindah ke Sidebar ---
-    st.divider() # Pemisah visual
+    st.divider() 
     if st.button("🔍 Cari Putaran Terbaik"):
         if 'df_data' not in st.session_state or len(st.session_state.df_data) < 30:
             st.warning("❌ Butuh minimal 30 data dari API untuk fitur ini.")
         else:
-            # Hasil analisis akan muncul di halaman utama
             st.session_state.run_best_putaran_search = True
-    # --- AKHIR MODIFIKASI ---
 
 # --- Ambil Data ---
 query_id = f"{selected_lokasi}-{selected_hari}"
@@ -84,14 +87,12 @@ df = st.session_state.get('df_data', pd.DataFrame()).tail(putaran)
 with st.expander(f"📥 Menampilkan {len(df)} dari {st.session_state.get('df_data', pd.DataFrame()).shape[0]} data terakhir"):
     st.code("\n".join(df['angka'].tolist()), language="text")
 
-# --- MODIFIKASI: Tombol Prediksi Sekarang dipusatkan di halaman utama ---
+# Tombol Prediksi Utama
 if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
-    st.session_state.run_best_putaran_search = False # Matikan pencarian jika prediksi dijalankan
-    # Logika tombol prediksi utama...
+    st.session_state.run_best_putaran_search = False 
     if len(df) < 11:
         st.warning("❌ Minimal 11 data diperlukan untuk prediksi.")
     else:
-        # Proses prediksi seperti biasa
         with st.spinner("⏳ Melakukan prediksi..."):
             result = None
             if metode == "Markov": result, _ = predict_markov(df, top_n=top_n)
@@ -100,7 +101,6 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
             elif metode == "LSTM AI": result = predict_lstm(df, lokasi=selected_lokasi, top_n=top_n)
             elif metode == "Ensemble AI + Markov": result = predict_ensemble(df, lokasi=selected_lokasi, top_n=top_n)
         
-        # Tampilkan hasil prediksi
         if result is None:
             st.error("❌ Gagal melakukan prediksi. Pastikan model AI sudah dilatih jika menggunakan metode AI.")
         else:
@@ -118,7 +118,7 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
                         for i, (komb, score) in enumerate(top_komb):
                             with komb_cols[i % 2]:
                                 st.markdown(f"### `{komb}`\n*Confidence: `{score:.4f}`*")
-        # Evaluasi Akurasi
+        
         st.subheader("🔍 Evaluasi Akurasi Model")
         with st.spinner("📏 Menghitung akurasi..."):
             uji_df = df.tail(min(jumlah_uji, len(df)))
@@ -160,7 +160,7 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
             else:
                 st.warning("⚠️ Tidak cukup data historis untuk melakukan evaluasi akurasi.")
 
-# --- Logika untuk menjalankan pencarian putaran terbaik ---
+# Logika untuk menjalankan pencarian putaran terbaik
 if st.session_state.get('run_best_putaran_search', False):
     with st.spinner("Menganalisis putaran terbaik, ini akan memakan waktu..."):
         full_df = st.session_state.df_data
@@ -217,4 +217,4 @@ if st.session_state.get('run_best_putaran_search', False):
             chart_data.index.name = 'Jumlah Putaran'
             st.line_chart(chart_data)
     
-    st.session_state.run_best_putaran_search = False # Reset state setelah selesai
+    st.session_state.run_best_putaran_search = False
