@@ -1,115 +1,134 @@
-import random
-from collections import defaultdict, Counter
+# markov_model.py
+
 import pandas as pd
+import numpy as np
 
-# MARKOV ORDER-1
-def build_transition_matrix(data):
-    matrix = [defaultdict(lambda: defaultdict(int)) for _ in range(3)]
-    for number in data:
-        digits = f"{int(number):04d}"
-        for i in range(3):
-            matrix[i][digits[i]][digits[i+1]] += 1
-    return matrix
+def _get_digits(df):
+    """Membantu mengubah dataframe angka string menjadi list of lists of int."""
+    if df.empty:
+        return np.array([])
+    return np.array(df['angka'].apply(lambda x: [int(d) for d in str(x).zfill(4)]).tolist())
 
-def top6_markov(df):
-    data = df["angka"].astype(str).tolist()
-    matrix = build_transition_matrix(data)
+def predict_markov(df, top_n=6):
+    """
+    Prediksi berdasarkan transisi dari satu digit ke digit berikutnya (Order-1).
+    Contoh: P(Ratusan | Ribuan), P(Puluhan | Ratusan), dst.
+    """
+    digits = _get_digits(df)
+    if digits.shape[0] < 1:
+        return None, None
 
-    # Statistik tambahan
-    freq_ribuan = Counter([int(x[0]) for x in data])
-    transisi = [{k: dict(v) for k, v in matrix[i].items()} for i in range(3)]
-    kombinasi = Counter(data).most_common(10)
+    # Matriks transisi: [posisi_digit, digit_sebelumnya, digit_sekarang]
+    # Posisi 0: Ribuan (tidak ada transisi, hanya frekuensi)
+    # Posisi 1: Ratusan (transisi dari Ribuan)
+    # Posisi 2: Puluhan (transisi dari Ratusan)
+    # Posisi 3: Satuan (transisi dari Puluhan)
+    
+    # Frekuensi digit pertama (Ribuan)
+    freq_ribuan = np.zeros(10)
+    # Matriks transisi untuk posisi lainnya
+    transitions = np.zeros((3, 10, 10))
 
-    hasil = []
+    for row in digits:
+        freq_ribuan[row[0]] += 1
+        transitions[0, row[0], row[1]] += 1  # Ribuan -> Ratusan
+        transitions[1, row[1], row[2]] += 1  # Ratusan -> Puluhan
+        transitions[2, row[2], row[3]] += 1  # Puluhan -> Satuan
 
-    # Ribuan (posisi pertama)
-    top6_pos1 = [k for k, _ in freq_ribuan.most_common(6)]
-    while len(top6_pos1) < 6:
-        top6_pos1.append(random.randint(0, 9))
-    hasil.append(top6_pos1)
-
-    # Prediksi berdasarkan transisi digit
+    # Normalisasi untuk mendapatkan probabilitas
+    # Tambahkan 1e-6 untuk menghindari pembagian dengan nol
+    prob_ribuan = freq_ribuan / (freq_ribuan.sum() + 1e-6)
+    
+    prob_trans = np.zeros_like(transitions)
     for i in range(3):
-        all_trans = matrix[i]
-        kandidat = []
-        for prev_digit in all_trans:
-            kandidat.extend(all_trans[prev_digit].keys())
-        kandidat = Counter(kandidat).most_common()
-        top6 = [int(k) for k, _ in kandidat[:6]]
-        while len(top6) < 6:
-            top6.append(random.randint(0, 9))
-        hasil.append(top6)
+        row_sums = transitions[i].sum(axis=1, keepdims=True)
+        prob_trans[i] = transitions[i] / (row_sums + 1e-6)
 
-    info = {
-        "frekuensi_ribuan": dict(freq_ribuan),
-        "transisi": transisi,
-        "kombinasi_populer": kombinasi
-    }
+    # Prediksi
+    # Untuk setiap posisi, kita ambil probabilitas rata-rata kemunculan setiap digit
+    # Ribuan: Berdasarkan frekuensi historis
+    # Posisi lain: Probabilitas rata-rata dari semua kemungkinan transisi
+    avg_probs = np.zeros((4, 10))
+    avg_probs[0] = prob_ribuan
+    avg_probs[1] = prob_trans[0].mean(axis=0)
+    avg_probs[2] = prob_trans[1].mean(axis=0)
+    avg_probs[3] = prob_trans[2].mean(axis=0)
+    
+    # Ambil top N digit untuk setiap posisi
+    result = [np.argsort(probs)[-top_n:][::-1] for probs in avg_probs]
+    
+    # Kembalikan juga matriks probabilitas untuk kegunaan lain (misal: ensemble)
+    return result, avg_probs
 
-    return hasil, info
 
-# MARKOV ORDER-2
-def build_transition_matrix_order2(data):
-    matrix = [{} for _ in range(2)]
-    for number in data:
-        digits = f"{int(number):04d}"
-        key1 = digits[0] + digits[1]
-        key2 = digits[1] + digits[2]
-        if key1 not in matrix[0]:
-            matrix[0][key1] = defaultdict(int)
-        if key2 not in matrix[1]:
-            matrix[1][key2] = defaultdict(int)
-        matrix[0][key1][digits[2]] += 1
-        matrix[1][key2][digits[3]] += 1
-    return matrix
+def predict_markov_order2(df, top_n=6):
+    """
+    Prediksi berdasarkan transisi dari dua digit sebelumnya (Order-2).
+    Contoh: P(Puluhan | Ribuan, Ratusan), P(Satuan | Ratusan, Puluhan).
+    """
+    digits = _get_digits(df)
+    if digits.shape[0] < 2:
+        return None
 
-def top6_markov_order2(df):
-    data = df["angka"].astype(str).tolist()
-    matrix = build_transition_matrix_order2(data)
+    # Frekuensi untuk dua posisi pertama
+    freq_ribuan = np.zeros(10)
+    trans_ratusan = np.zeros((10, 10))
+    # Transisi order-2
+    trans_puluhan = np.zeros((10, 10, 10)) # (d_ribuan, d_ratusan) -> d_puluhan
+    trans_satuan = np.zeros((10, 10, 10))  # (d_ratusan, d_puluhan) -> d_satuan
 
-    pairs = [x[:2] for x in data]
-    top_pairs = Counter(pairs).most_common(6)
-    d1, d2 = top_pairs[0][0][0], top_pairs[0][0][1]
+    for row in digits:
+        freq_ribuan[row[0]] += 1
+        trans_ratusan[row[0], row[1]] += 1
+        trans_puluhan[row[0], row[1], row[2]] += 1
+        trans_satuan[row[1], row[2], row[3]] += 1
+    
+    # Probabilitas rata-rata
+    avg_probs = np.zeros((4, 10))
+    avg_probs[0] = freq_ribuan / (freq_ribuan.sum() + 1e-6)
+    
+    sum_ratusan = trans_ratusan.sum(axis=1, keepdims=True)
+    avg_probs[1] = (trans_ratusan / (sum_ratusan + 1e-6)).mean(axis=0)
 
-    top6_d1 = list(set([int(p[0][0]) for p in top_pairs]))
-    top6_d2 = list(set([int(p[0][1]) for p in top_pairs]))
-    while len(top6_d1) < 6:
-        top6_d1.append(random.randint(0, 9))
-    while len(top6_d2) < 6:
-        top6_d2.append(random.randint(0, 9))
+    sum_puluhan = trans_puluhan.sum(axis=2, keepdims=True)
+    avg_probs[2] = (trans_puluhan / (sum_puluhan + 1e-6)).mean(axis=(0, 1))
+    
+    sum_satuan = trans_satuan.sum(axis=2, keepdims=True)
+    avg_probs[3] = (trans_satuan / (sum_satuan + 1e-6)).mean(axis=(0, 1))
 
-    hasil = [top6_d1, top6_d2]
+    result = [np.argsort(probs)[-top_n:][::-1] for probs in avg_probs]
+    return result
 
-    key1 = d1 + d2
-    dist3 = matrix[0].get(key1, {})
-    top6_d3 = sorted(dist3.items(), key=lambda x: -x[1])
-    top6_d3 = [int(k) for k, _ in top6_d3[:6]]
-    while len(top6_d3) < 6:
-        top6_d3.append(random.randint(0, 9))
-    hasil.append(top6_d3)
 
-    key2 = d2 + str(top6_d3[0])
-    dist4 = matrix[1].get(key2, {})
-    top6_d4 = sorted(dist4.items(), key=lambda x: -x[1])
-    top6_d4 = [int(k) for k, _ in top6_d4[:6]]
-    while len(top6_d4) < 6:
-        top6_d4.append(random.randint(0, 9))
-    hasil.append(top6_d4)
+def predict_markov_hybrid(df, top_n=6):
+    """
+    Menggabungkan hasil dari Markov Order-1 dan Order-2.
+    """
+    digits = _get_digits(df)
+    if digits.shape[0] < 2:
+        return None
 
-    return hasil
+    _, probs_o1 = predict_markov(df, top_n=10) # Ambil semua probabilitas
+    
+    # Dapatkan probabilitas dari Order-2 (kode disederhanakan dari predict_markov_order2)
+    freq_ribuan = np.zeros(10)
+    trans_ratusan = np.zeros((10, 10))
+    trans_puluhan = np.zeros((10, 10, 10))
+    trans_satuan = np.zeros((10, 10, 10))
+    for row in digits:
+        freq_ribuan[row[0]] += 1
+        trans_ratusan[row[0], row[1]] += 1
+        trans_puluhan[row[0], row[1], row[2]] += 1
+        trans_satuan[row[1], row[2], row[3]] += 1
+    
+    probs_o2 = np.zeros((4, 10))
+    probs_o2[0] = freq_ribuan / (freq_ribuan.sum() + 1e-6)
+    probs_o2[1] = (trans_ratusan / (trans_ratusan.sum(axis=1, keepdims=True) + 1e-6)).mean(axis=0)
+    probs_o2[2] = (trans_puluhan / (trans_puluhan.sum(axis=2, keepdims=True) + 1e-6)).mean(axis=(0, 1))
+    probs_o2[3] = (trans_satuan / (trans_satuan.sum(axis=2, keepdims=True) + 1e-6)).mean(axis=(0, 1))
 
-# HYBRID
-def top6_markov_hybrid(df):
-    hasil1, _ = top6_markov(df)
-    hasil2 = top6_markov_order2(df)
-
-    hasil = []
-    for i in range(4):
-        gabung = hasil1[i] + hasil2[i]
-        freq = Counter(gabung)
-        top6 = [k for k, _ in freq.most_common(6)]
-        while len(top6) < 6:
-            top6.append(random.randint(0, 9))
-        hasil.append(top6)
-
-    return hasil
+    # Gabungkan probabilitas (misalnya dengan rata-rata)
+    hybrid_probs = (probs_o1 + probs_o2) / 2.0
+    
+    result = [np.argsort(probs)[-top_n:][::-1] for probs in hybrid_probs]
+    return result
