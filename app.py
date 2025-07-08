@@ -6,7 +6,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from markov_model import top7_markov, top7_markov_order7, top7_markov_hybrid
+from markov_model import top6_markov, top6_markov_order2, top6_markov_hybrid
 from ai_model import (
     top6_lstm,
     train_and_save_lstm,
@@ -28,7 +28,7 @@ def load_lottieurl(url):
 lottie_predict = load_lottieurl("https://assets2.lottiefiles.com/packages/lf20_kkflmtur.json")
 st_lottie(lottie_predict, speed=1, height=150, key="prediksi")
 
-st.title("🔮 Analisis Angka 4D")
+st.title("🔮 Prediksi 4D - AI & Markov")
 
 # Sidebar
 hari_list = ["harian", "kemarin", "2hari", "3hari", "4hari", "5hari"]
@@ -96,30 +96,17 @@ if st.button("🔮 Prediksi"):
         st.warning("❌ Minimal 11 data diperlukan.")
     else:
         with st.spinner("⏳ Melakukan prediksi..."):
-            result, probs = None, None
+            result = None
             if metode == "Markov":
-                result, _ = top7_markov(df)
+                result, _ = top6_markov(df)
             elif metode == "Markov Order-2":
-                result = top7_markov_order2(df)
+                result = top6_markov_order2(df)
             elif metode == "Markov Gabungan":
-                result = top7_markov_hybrid(df)
+                result = top6_markov_hybrid(df)
             elif metode == "LSTM AI":
-                pred = top7_lstm(df, lokasi=selected_lokasi, return_probs=True)
-                if pred:
-                    result, probs = pred
+                result = top6_lstm(df, lokasi=selected_lokasi)
             elif metode == "Ensemble AI + Markov":
-                pred = top7_lstm(df, lokasi=selected_lokasi, return_probs=True)
-                if pred:
-                    result, probs = pred
-                    markov_result, _ = top7_markov(df)
-                    if markov_result:
-                        ensemble = []
-                        for i in range(4):
-                            combined = result[i] + markov_result[i]
-                            freq = {x: combined.count(x) for x in set(combined)}
-                            top6 = sorted(freq.items(), key=lambda x: -x[1])[:6]
-                            ensemble.append([x[0] for x in top6])
-                        result = ensemble
+                result = top6_ensemble(df, lokasi=selected_lokasi)
 
         if result is None:
             st.error("❌ Gagal melakukan prediksi.")
@@ -129,16 +116,6 @@ if st.button("🔮 Prediksi"):
                 for i, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
                     with (col1 if i % 2 == 0 else col2):
                         st.markdown(f"**{label}:** {', '.join(map(str, result[i]))}")
-
-            if metode in ["LSTM AI", "Ensemble AI + Markov"] and probs:
-                with st.expander("📊 Confidence Bar per Digit"):
-                    for i, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
-                        st.markdown(f"**🔢 {label}**")
-                        digit_data = pd.DataFrame({
-                            "Digit": [str(d) for d in result[i]],
-                            "Confidence": probs[i]
-                        }).sort_values(by="Confidence", ascending=True)
-                        st.bar_chart(digit_data.set_index("Digit"))
 
             if metode in ["LSTM AI", "Ensemble AI + Markov"]:
                 with st.spinner("🔢 Menghitung kombinasi 4D terbaik..."):
@@ -163,14 +140,15 @@ if st.button("🔮 Prediksi"):
                     continue
                 try:
                     pred = (
-                        top7_markov(subset_df)[0] if metode == "Markov" else
-                        top7_markov_order2(subset_df) if metode == "Markov Order-2" else
-                        top7_markov_hybrid(subset_df) if metode == "Markov Gabungan" else
-                        top7_lstm(subset_df, lokasi=selected_lokasi) if metode == "LSTM AI" else
-                        top7_ensemble(subset_df, lokasi=selected_lokasi)
+                        top6_markov(subset_df)[0] if metode == "Markov" else
+                        top6_markov_order2(subset_df) if metode == "Markov Order-2" else
+                        top6_markov_hybrid(subset_df) if metode == "Markov Gabungan" else
+                        top6_lstm(subset_df, lokasi=selected_lokasi) if metode == "LSTM AI" else
+                        top6_ensemble(subset_df, lokasi=selected_lokasi)
                     )
                     if pred is None:
                         continue
+
                     actual = f"{int(uji_df.iloc[i]['angka']):04d}"
                     skor = 0
                     for j, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
@@ -187,24 +165,12 @@ if st.button("🔮 Prediksi"):
 
             if total > 0:
                 st.success(f"📈 Akurasi {metode}: {benar / total * 100:.2f}%")
-
                 with st.expander("📊 Grafik Akurasi"):
                     st.line_chart(pd.DataFrame({"Akurasi (%)": akurasi_list}))
-
                 with st.expander("🔥 Heatmap Akurasi per Digit"):
-                    heat_df = pd.DataFrame({
-                        k: [sum(v) / len(v) * 100 if v else 0]
-                        for k, v in digit_acc.items()
-                    })
+                    heat_df = pd.DataFrame({k: [sum(v)/len(v)*100 if v else 0] for k, v in digit_acc.items()})
                     fig, ax = plt.subplots()
                     sns.heatmap(heat_df, annot=True, fmt=".1f", cmap="YlGnBu", ax=ax)
                     st.pyplot(fig)
-
-                # ✅ Tambahan: Akurasi Top-1 per Digit
-                st.markdown("### 🧠 Akurasi Top-1 per Digit")
-                akurasi_digit_1 = {
-                    k: f"{sum(v)/len(v)*100:.2f}%" if v else "0.00%" for k, v in digit_acc.items()
-                }
-                st.table(pd.DataFrame(akurasi_digit_1.items(), columns=["Digit", "Top-1 Akurasi"]))
             else:
                 st.warning("⚠️ Tidak cukup data untuk evaluasi akurasi.")
