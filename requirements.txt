@@ -1,11 +1,8 @@
 streamlit
 pandas
-numpy
-tensorflow==2.13.0
-scikit-learn
-openai==0.28
-python-dotenv
 requests
-matplotlib
-streamlit_lottie
+numpy
 seaborn
+matplotlib
+tensorflow
+streamlit-lottie
