@@ -83,7 +83,10 @@ if 'df_data' not in st.session_state or st.session_state.get('last_query') != qu
             st.session_state.df_data = pd.DataFrame({"angka": []})
 
 df = st.session_state.get('df_data', pd.DataFrame()).tail(putaran)
-with st.expander(f"📥 Menampilkan {len(df)} dari {st.session_state.get('df_data', pd.DataFrame()).shape[0]} data terakhir"):
+
+# --- MODIFIKASI: Mengubah teks expander ---
+with st.expander(f"✅ {len(df)} angka berhasil diambil."):
+# --- AKHIR MODIFIKASI ---
     st.code("\n".join(df['angka'].tolist()), language="text")
 
 # Tombol Prediksi Utama
