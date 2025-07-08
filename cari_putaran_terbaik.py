@@ -14,11 +14,11 @@ def cari_putaran_terbaik(df_all, lokasi, metode, jumlah_uji=10, max_putaran=200,
 
             try:
                 pred = (
-                    top6_markov(train_df)[0] if metode == "Markov" else
-                    top6_markov_order2(train_df) if metode == "Markov Order-2" else
-                    top6_markov_hybrid(train_df, digit_weights=digit_weights) if metode == "Markov Gabungan" else
-                    top6_lstm(train_df, lokasi=lokasi) if metode == "LSTM AI" else
-                    top6_ensemble(train_df, lokasi=lokasi)
+                    top7_markov(train_df)[0] if metode == "Markov" else
+                    top7_markov_order2(train_df) if metode == "Markov Order-2" else
+                    top7_markov_hybrid(train_df, digit_weights=digit_weights) if metode == "Markov Gabungan" else
+                    top7_lstm(train_df, lokasi=lokasi) if metode == "LSTM AI" else
+                    top7_ensemble(train_df, lokasi=lokasi)
                 )
                 actual = f"{int(subset.iloc[-(jumlah_uji - i)]['angka']):04d}"
                 acc = sum(int(actual[j]) in pred[j] for j in range(4))
