@@ -5,8 +5,9 @@ import os
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from itertools import product
 
-# Impor fungsi top7
+# Impor fungsi yang sudah diperbarui
 from markov_model import top7_markov, top7_markov_order2, top7_markov_hybrid
 from ai_model import (
     top7_lstm,
@@ -51,7 +52,6 @@ with st.sidebar:
 
 # Ambil Data
 angka_list = []
-riwayat_input = ""
 if selected_lokasi and selected_hari:
     try:
         with st.spinner("🔄 Mengambil data dari API..."):
@@ -60,10 +60,9 @@ if selected_lokasi and selected_hari:
             response = requests.get(url, headers=headers)
             data = response.json()
             angka_list = [item["result"] for item in data.get("data", []) if len(item["result"]) == 4 and item["result"].isdigit()]
-            riwayat_input = "\n".join(angka_list)
             st.success(f"✅ {len(angka_list)} angka berhasil diambil.")
             with st.expander("📥 Lihat Data"):
-                st.code(riwayat_input, language="text")
+                st.code("\n".join(angka_list), language="text")
     except Exception as e:
         st.error(f"❌ Gagal ambil data API: {e}")
 
@@ -114,11 +113,33 @@ if st.button("🔮 Prediksi"):
         if result is None:
             st.error("❌ Gagal melakukan prediksi. Pastikan model AI sudah dilatih jika menggunakan metode tersebut.")
         else:
-            # --- PERUBAHAN 1: Tampilan hasil diubah per baris dengan label baru ---
-            with st.expander("🎯 Hasil Prediksi Top 7 Digit", expanded=True):
+            result_unique = [list(dict.fromkeys(sublist)) for sublist in result]
+
+            with st.expander("🎯 Hasil Prediksi Digit Unik", expanded=True):
                 labels = ["As", "Kop", "Kepala", "Ekor"]
                 for i, label in enumerate(labels):
-                    st.markdown(f"**{label}:** {', '.join(map(str, result[i]))}")
+                    st.markdown(f"**{label}:** {', '.join(map(str, result_unique[i]))}")
+
+            with st.expander("🔢 Angka Jadi 2D, 3D, 4D", expanded=True):
+                as_pred, kop_pred, kepala_pred, ekor_pred = result_unique
+
+                # --- Angka Jadi 2D ---
+                kombinasi_2d = product(kepala_pred, ekor_pred)
+                angka_jadi_2d_list = sorted(["".join(map(str, k)) for k in kombinasi_2d])
+                st.markdown(f"**Angka Jadi 2D ({len(angka_jadi_2d_list)} kombinasi):**")
+                st.code("*".join(angka_jadi_2d_list))
+
+                # --- Angka Jadi 3D ---
+                kombinasi_3d = product(kop_pred, kepala_pred, ekor_pred)
+                angka_jadi_3d_list = sorted(["".join(map(str, k)) for k in kombinasi_3d])
+                st.markdown(f"**Angka Jadi 3D ({len(angka_jadi_3d_list)} kombinasi):**")
+                st.code("*".join(angka_jadi_3d_list))
+                
+                # --- Angka Jadi 4D ---
+                kombinasi_4d_jadi = product(as_pred, kop_pred, kepala_pred, ekor_pred)
+                angka_jadi_4d_list = sorted(["".join(map(str, k)) for k in kombinasi_4d_jadi])
+                st.markdown(f"**Angka Jadi 4D ({len(angka_jadi_4d_list)} kombinasi):**")
+                st.code("*".join(angka_jadi_4d_list))
 
             if metode in ["LSTM AI", "Ensemble AI + Markov"]:
                 with st.spinner("🔢 Menghitung kombinasi 4D terbaik..."):
@@ -130,13 +151,11 @@ if st.button("🔮 Prediksi"):
                                 with sim_col[i % 2]:
                                     st.markdown(f"`{komb}` - ⚡️ Confidence: `{score:.4f}`")
 
-        # Evaluasi Akurasi
         with st.spinner("📏 Menghitung akurasi..."):
             uji_df = df.tail(min(jumlah_uji, len(df)))
             total, benar = 0, 0
             akurasi_list = []
             
-            # --- PERUBAHAN 2: Label untuk akurasi diubah ---
             labels_acc = ["As", "Kop", "Kepala", "Ekor"]
             digit_acc = {label: [] for label in labels_acc}
 
@@ -145,16 +164,18 @@ if st.button("🔮 Prediksi"):
                 if len(subset_df) < 20:
                     continue
                 try:
-                    pred = (
+                    pred_raw = (
                         top7_markov(subset_df)[0] if metode == "Markov" else
                         top7_markov_order2(subset_df) if metode == "Markov Order-2" else
                         top7_markov_hybrid(subset_df) if metode == "Markov Gabungan" else
                         top7_lstm(subset_df, lokasi=selected_lokasi) if metode == "LSTM AI" else
                         top7_ensemble(subset_df, lokasi=selected_lokasi)
                     )
-                    if pred is None:
+                    if pred_raw is None:
                         continue
-
+                    
+                    pred = [list(dict.fromkeys(sublist)) for sublist in pred_raw]
+                    
                     actual = f"{int(uji_df.iloc[i]['angka']):04d}"
                     skor = 0
                     for j, label in enumerate(labels_acc):
@@ -166,7 +187,7 @@ if st.button("🔮 Prediksi"):
                     total += 4
                     benar += skor
                     akurasi_list.append(skor / 4 * 100)
-                except:
+                except Exception:
                     continue
 
             if total > 0:
