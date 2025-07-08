@@ -1,8 +1,11 @@
 streamlit
 pandas
-requests
 numpy
-seaborn
+tensorflow==2.13.0
+scikit-learn
+openai==0.28
+python-dotenv
+requests
 matplotlib
-tensorflow
-streamlit-copy-button
+streamlit_lottie
+seaborn
