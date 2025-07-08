@@ -6,6 +6,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import time
+from itertools import product # MODIFIKASI: Menambahkan import product
 
 # Impor fungsi-fungsi dari file model
 from markov_model import (
@@ -36,11 +37,9 @@ st_lottie(lottie_predict, speed=1, height=150, key="prediksi")
 
 st.title("🔮 Prediksi 4D - AI & Markov")
 
-# --- MODIFIKASI: Definisi list dipindahkan ke sini ---
 # Mendefinisikan list sebelum digunakan di dalam sidebar
 hari_list = ["harian", "kemarin", "2hari", "3hari", "4hari", "5hari"]
 metode_list = ["Markov", "Markov Order-2", "Markov Gabungan", "LSTM AI", "Ensemble AI + Markov"]
-# --- AKHIR MODIFIKASI ---
 
 # --- Sidebar ---
 with st.sidebar:
@@ -59,7 +58,7 @@ with st.sidebar:
         min_conf = st.slider("🔎 Minimum Confidence", 0.0001, 0.001, 0.0005, step=0.0001, format="%.4f")
         power = st.slider("📈 Confidence Weight Power", 0.5, 3.0, 1.5, step=0.1)
 
-    st.divider() 
+    st.divider()
     if st.button("🔍 Cari Putaran Terbaik"):
         if 'df_data' not in st.session_state or len(st.session_state.df_data) < 30:
             st.warning("❌ Butuh minimal 30 data dari API untuk fitur ini.")
@@ -89,7 +88,7 @@ with st.expander(f"📥 Menampilkan {len(df)} dari {st.session_state.get('df_dat
 
 # Tombol Prediksi Utama
 if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
-    st.session_state.run_best_putaran_search = False 
+    st.session_state.run_best_putaran_search = False
     if len(df) < 11:
         st.warning("❌ Minimal 11 data diperlukan untuk prediksi.")
     else:
@@ -100,7 +99,7 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
             elif metode == "Markov Gabungan": result = predict_markov_hybrid(df, top_n=top_n)
             elif metode == "LSTM AI": result = predict_lstm(df, lokasi=selected_lokasi, top_n=top_n)
             elif metode == "Ensemble AI + Markov": result = predict_ensemble(df, lokasi=selected_lokasi, top_n=top_n)
-        
+
         if result is None:
             st.error("❌ Gagal melakukan prediksi. Pastikan model AI sudah dilatih jika menggunakan metode AI.")
         else:
@@ -108,6 +107,34 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
             labels = ["As", "Kop", "Kepala", "Ekor"]
             for i, label in enumerate(labels):
                 st.markdown(f"#### **{label}:** {', '.join(map(str, result[i]))}")
+
+            # --- MODIFIKASI: Menambahkan Blok Hasil Kombinasi 2D/3D/4D ---
+            st.divider()
+            with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
+                # Generate kombinasi angka
+                kombinasi_4d_list = ["".join(map(str, p)) for p in product(result[0], result[1], result[2], result[3])]
+                kombinasi_3d_list = ["".join(map(str, p)) for p in product(result[1], result[2], result[3])]
+                kombinasi_2d_list = ["".join(map(str, p)) for p in product(result[2], result[3])]
+
+                # Format sebagai text untuk ditampilkan dan diunduh
+                text_4d = " ".join(kombinasi_4d_list)
+                text_3d = " ".join(kombinasi_3d_list)
+                text_2d = " ".join(kombinasi_2d_list)
+
+                tab4d, tab3d, tab2d = st.tabs([f"Kombinasi 4D ({len(kombinasi_4d_list)})", f"Kombinasi 3D ({len(kombinasi_3d_list)})", f"Kombinasi 2D ({len(kombinasi_2d_list)})"])
+
+                with tab4d:
+                    st.text_area("Hasil 4D (As-Kop-Kepala-Ekor)", text_4d, height=200, key="text_4d")
+                    st.download_button("Unduh 4D.txt", text_4d, file_name=f"hasil_4d_{selected_lokasi.lower()}.txt")
+
+                with tab3d:
+                    st.text_area("Hasil 3D (Kop-Kepala-Ekor)", text_3d, height=200, key="text_3d")
+                    st.download_button("Unduh 3D.txt", text_3d, file_name=f"hasil_3d_{selected_lokasi.lower()}.txt")
+
+                with tab2d:
+                    st.text_area("Hasil 2D (Kepala-Ekor)", text_2d, height=200, key="text_2d")
+                    st.download_button("Unduh 2D.txt", text_2d, file_name=f"hasil_2d_{selected_lokasi.lower()}.txt")
+            # --- AKHIR MODIFIKASI ---
 
             if metode in ["LSTM AI", "Ensemble AI + Markov"]:
                 with st.spinner("🔢 Menghitung kombinasi 4D terbaik..."):
@@ -118,7 +145,7 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
                         for i, (komb, score) in enumerate(top_komb):
                             with komb_cols[i % 2]:
                                 st.markdown(f"### `{komb}`\n*Confidence: `{score:.4f}`*")
-        
+
         st.subheader("🔍 Evaluasi Akurasi Model")
         with st.spinner("📏 Menghitung akurasi..."):
             uji_df = df.tail(min(jumlah_uji, len(df)))
