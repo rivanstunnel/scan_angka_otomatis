@@ -11,8 +11,7 @@ from tensorflow.keras.utils import to_categorical
 import os
 import pandas as pd
 from itertools import product
-# --- PERUBAHAN DI SINI ---
-from markov_model import top7_markov
+from markov_model import top6_markov
 
 class PositionalEncoding(tf.keras.layers.Layer):
     def call(self, x):
@@ -128,16 +127,13 @@ def kombinasi_4d(df, lokasi, top_n=10, min_conf=0.0001, power=1.5, mode='product
 
 def top6_ensemble(df, lokasi):
     lstm_result = top6_lstm(df, lokasi=lokasi)
-    # --- PERUBAHAN DI SINI ---
-    markov_result, _ = top7_markov(df)
+    markov_result, _ = top6_markov(df)
     if lstm_result is None or markov_result is None:
         return None
     ensemble = []
     for i in range(4):
-        # Menggabungkan hasil top 6 LSTM dengan top 7 Markov
         combined = lstm_result[i] + markov_result[i]
         freq = {x: combined.count(x) for x in set(combined)}
-        # Tetap mengambil 6 teratas dari hasil gabungan
         top6 = sorted(freq.items(), key=lambda x: -x[1])[:6]
         ensemble.append([x[0] for x in top6])
     return ensemble
