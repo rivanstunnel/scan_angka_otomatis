@@ -6,7 +6,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import time
-from itertools import product # MODIFIKASI: Menambahkan import product
+from itertools import product
 
 # Impor fungsi-fungsi dari file model
 from markov_model import (
@@ -108,18 +108,18 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
             for i, label in enumerate(labels):
                 st.markdown(f"#### **{label}:** {', '.join(map(str, result[i]))}")
 
-            # --- MODIFIKASI: Menambahkan Blok Hasil Kombinasi 2D/3D/4D ---
             st.divider()
             with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
-                # Generate kombinasi angka
                 kombinasi_4d_list = ["".join(map(str, p)) for p in product(result[0], result[1], result[2], result[3])]
                 kombinasi_3d_list = ["".join(map(str, p)) for p in product(result[1], result[2], result[3])]
                 kombinasi_2d_list = ["".join(map(str, p)) for p in product(result[2], result[3])]
 
-                # Format sebagai text untuk ditampilkan dan diunduh
-                text_4d = " ".join(kombinasi_4d_list)
-                text_3d = " ".join(kombinasi_3d_list)
-                text_2d = " ".join(kombinasi_2d_list)
+                # --- MODIFIKASI: Mengganti pemisah dari spasi menjadi bintang ---
+                separator = " * "
+                text_4d = separator.join(kombinasi_4d_list)
+                text_3d = separator.join(kombinasi_3d_list)
+                text_2d = separator.join(kombinasi_2d_list)
+                # --- AKHIR MODIFIKASI ---
 
                 tab4d, tab3d, tab2d = st.tabs([f"Kombinasi 4D ({len(kombinasi_4d_list)})", f"Kombinasi 3D ({len(kombinasi_3d_list)})", f"Kombinasi 2D ({len(kombinasi_2d_list)})"])
 
@@ -134,7 +134,6 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
                 with tab2d:
                     st.text_area("Hasil 2D (Kepala-Ekor)", text_2d, height=200, key="text_2d")
                     st.download_button("Unduh 2D.txt", text_2d, file_name=f"hasil_2d_{selected_lokasi.lower()}.txt")
-            # --- AKHIR MODIFIKASI ---
 
             if metode in ["LSTM AI", "Ensemble AI + Markov"]:
                 with st.spinner("🔢 Menghitung kombinasi 4D terbaik..."):
