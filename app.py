@@ -144,7 +144,6 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
                             with komb_cols[i % 2]:
                                 st.markdown(f"### `{komb}`\n*Confidence: `{score:.4f}`*")
 
-        # --- MODIFIKASI: Penambahan Kalkulasi dan Tampilan Akurasi Top-1 ---
         st.subheader("🔍 Evaluasi Akurasi Model")
         with st.spinner("📏 Menghitung akurasi..."):
             uji_df = df.tail(min(jumlah_uji, len(df)))
@@ -152,7 +151,7 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
             akurasi_list = []
             labels = ["As", "Kop", "Kepala", "Ekor"]
             digit_acc = {label: [] for label in labels}
-            digit_acc_top1 = {label: [] for label in labels} # Variabel baru untuk akurasi top-1
+            digit_acc_top1 = {label: [] for label in labels}
 
             for i in range(len(uji_df)):
                 subset_df = df.iloc[:-(len(uji_df) - i)]
@@ -169,13 +168,11 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
                     actual_eval = f"{int(uji_df.iloc[i]['angka']):04d}"
                     skor, skor_top1 = 0, 0
                     for j, label in enumerate(labels):
-                        # Akurasi Top-N (sudah ada)
                         if int(actual_eval[j]) in pred_eval[j]:
                             skor += 1; digit_acc[label].append(1)
                         else:
                             digit_acc[label].append(0)
                         
-                        # Akurasi Top-1 (baru)
                         if int(actual_eval[j]) == pred_eval[j][0]:
                             skor_top1 +=1; digit_acc_top1[label].append(1)
                         else:
@@ -188,27 +185,30 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
                 except Exception: continue
 
             if total_eval > 0:
+                # --- MODIFIKASI: Mengubah Tampilan Akurasi Menjadi Tabs ---
                 st.success(f"**📈 Akurasi Rata-rata (Top-{top_n})**: `{benar_eval / total_eval * 100:.2f}%`")
-                tab1, tab2 = st.tabs(["Grafik Tren Akurasi", "Heatmap Akurasi per Digit"])
-                with tab1: st.line_chart(pd.DataFrame({"Akurasi (%)": akurasi_list}))
+                
+                tab1, tab2, tab3 = st.tabs(["Grafik Tren Akurasi", "Heatmap Akurasi per Digit", "🧠 Akurasi Top-1"])
+                
+                with tab1:
+                    st.line_chart(pd.DataFrame({"Akurasi (%)": akurasi_list}))
+                
                 with tab2:
                     heat_df = pd.DataFrame({k: [sum(v)/len(v)*100 if v else 0] for k, v in digit_acc.items()})
                     fig, ax = plt.subplots(); sns.heatmap(heat_df, annot=True, fmt=".1f", cmap="YlGnBu", ax=ax, cbar=False); ax.set_yticklabels(ax.get_yticklabels(), rotation=0); st.pyplot(fig)
 
-                # Tampilan baru untuk akurasi Top-1
-                st.divider()
-                st.subheader("🧠 Akurasi Top-1 per Digit")
-                akurasi_top1_rata2 = (benar_eval_top1 / total_eval * 100)
-                st.metric("Akurasi Rata-rata (Hanya Prediksi Teratas)", f"{akurasi_top1_rata2:.2f}%")
-
-                cols_top1 = st.columns(4)
-                for idx, label in enumerate(labels):
-                    acc_top1 = (sum(digit_acc_top1[label]) / len(digit_acc_top1[label]) * 100) if digit_acc_top1[label] else 0
-                    cols_top1[idx].metric(f"Akurasi {label}", f"{acc_top1:.2f}%")
-
+                with tab3:
+                    akurasi_top1_rata2 = (benar_eval_top1 / total_eval * 100)
+                    st.metric("Akurasi Rata-rata (Hanya Prediksi Teratas)", f"{akurasi_top1_rata2:.2f}%")
+                    st.divider()
+                    cols_top1 = st.columns(4)
+                    for idx, label in enumerate(labels):
+                        acc_top1 = (sum(digit_acc_top1[label]) / len(digit_acc_top1[label]) * 100) if digit_acc_top1[label] else 0
+                        cols_top1[idx].metric(f"Akurasi {label}", f"{acc_top1:.2f}%")
+                # --- AKHIR MODIFIKASI ---
+                
             else:
                 st.warning("⚠️ Tidak cukup data historis untuk melakukan evaluasi akurasi.")
-        # --- AKHIR MODIFIKASI ---
 
 # Logika untuk menjalankan pencarian putaran terbaik
 if st.session_state.get('run_best_putaran_search', False):
@@ -234,7 +234,7 @@ if st.session_state.get('run_best_putaran_search', False):
                         pred = None
                         if metode == "Markov": pred, _ = predict_markov(subset_df, top_n=top_n)
                         elif metode == "Markov Order-2": pred = predict_markov_order2(subset_df, top_n=top_n)
-                        elif metode == "Markov Gabungan": pred = predict_markov_hybrid(subset_Д, top_n=top_n)
+                        elif metode == "Markov Gabungan": pred = predict_markov_hybrid(subset_df, top_n=top_n)
                         elif metode == "LSTM AI": pred = predict_lstm(subset_df, lokasi=selected_lokasi, top_n=top_n)
                         elif metode == "Ensemble AI + Markov": pred = predict_ensemble(subset_df, lokasi=selected_lokasi, top_n=top_n)
                         
