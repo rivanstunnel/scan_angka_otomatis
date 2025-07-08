@@ -6,13 +6,12 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# Impor fungsi top7
-from markov_model import top7_markov, top7_markov_order2, top7_markov_hybrid
+from markov_model import top6_markov, top6_markov_order2, top6_markov_hybrid
 from ai_model import (
-    top7_lstm,
+    top6_lstm,
     train_and_save_lstm,
     kombinasi_4d,
-    top7_ensemble,
+    top6_ensemble,
     model_exists
 )
 from lokasi_list import lokasi_list
@@ -70,7 +69,7 @@ if selected_lokasi and selected_hari:
 df = pd.DataFrame({"angka": angka_list})
 
 # Manajemen Model LSTM
-if metode in ["LSTM AI", "Ensemble AI + Markov"]:
+if metode == "LSTM AI":
     with st.expander("⚙️ Manajemen Model LSTM"):
         for i in range(4):
             model_path = f"saved_models/{selected_lokasi.lower().replace(' ', '_')}_digit{i}.h5"
@@ -85,13 +84,11 @@ if metode in ["LSTM AI", "Ensemble AI + Markov"]:
                     if st.button(f"🗑 Hapus Digit-{i}", key=f"hapus_digit_{i}"):
                         os.remove(model_path)
                         st.warning(f"✅ Model Digit-{i} dihapus.")
-                        st.experimental_rerun()
 
         if st.button("📚 Latih & Simpan Semua Model"):
             with st.spinner("🔄 Melatih semua model per digit..."):
                 train_and_save_lstm(df, selected_lokasi)
             st.success("✅ Semua model berhasil dilatih dan disimpan.")
-            st.experimental_rerun()
 
 # Tombol Prediksi
 if st.button("🔮 Prediksi"):
@@ -101,24 +98,24 @@ if st.button("🔮 Prediksi"):
         with st.spinner("⏳ Melakukan prediksi..."):
             result = None
             if metode == "Markov":
-                result, _ = top7_markov(df)
+                result, _ = top6_markov(df)
             elif metode == "Markov Order-2":
-                result = top7_markov_order2(df)
+                result = top6_markov_order2(df)
             elif metode == "Markov Gabungan":
-                result = top7_markov_hybrid(df)
+                result = top6_markov_hybrid(df)
             elif metode == "LSTM AI":
-                result = top7_lstm(df, lokasi=selected_lokasi)
+                result = top6_lstm(df, lokasi=selected_lokasi)
             elif metode == "Ensemble AI + Markov":
-                result = top7_ensemble(df, lokasi=selected_lokasi)
+                result = top6_ensemble(df, lokasi=selected_lokasi)
 
         if result is None:
-            st.error("❌ Gagal melakukan prediksi. Pastikan model AI sudah dilatih jika menggunakan metode tersebut.")
+            st.error("❌ Gagal melakukan prediksi.")
         else:
-            # --- PERUBAHAN 1: Tampilan hasil diubah per baris dengan label baru ---
-            with st.expander("🎯 Hasil Prediksi Top 7 Digit", expanded=True):
-                labels = ["As", "Kop", "Kepala", "Ekor"]
-                for i, label in enumerate(labels):
-                    st.markdown(f"**{label}:** {', '.join(map(str, result[i]))}")
+            with st.expander("🎯 Hasil Prediksi Top 6 Digit"):
+                col1, col2 = st.columns(2)
+                for i, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
+                    with (col1 if i % 2 == 0 else col2):
+                        st.markdown(f"**{label}:** {', '.join(map(str, result[i]))}")
 
             if metode in ["LSTM AI", "Ensemble AI + Markov"]:
                 with st.spinner("🔢 Menghitung kombinasi 4D terbaik..."):
@@ -135,10 +132,7 @@ if st.button("🔮 Prediksi"):
             uji_df = df.tail(min(jumlah_uji, len(df)))
             total, benar = 0, 0
             akurasi_list = []
-            
-            # --- PERUBAHAN 2: Label untuk akurasi diubah ---
-            labels_acc = ["As", "Kop", "Kepala", "Ekor"]
-            digit_acc = {label: [] for label in labels_acc}
+            digit_acc = {"Ribuan": [], "Ratusan": [], "Puluhan": [], "Satuan": []}
 
             for i in range(len(uji_df)):
                 subset_df = df.iloc[:-(len(uji_df) - i)]
@@ -146,18 +140,18 @@ if st.button("🔮 Prediksi"):
                     continue
                 try:
                     pred = (
-                        top7_markov(subset_df)[0] if metode == "Markov" else
-                        top7_markov_order2(subset_df) if metode == "Markov Order-2" else
-                        top7_markov_hybrid(subset_df) if metode == "Markov Gabungan" else
-                        top7_lstm(subset_df, lokasi=selected_lokasi) if metode == "LSTM AI" else
-                        top7_ensemble(subset_df, lokasi=selected_lokasi)
+                        top6_markov(subset_df)[0] if metode == "Markov" else
+                        top6_markov_order2(subset_df) if metode == "Markov Order-2" else
+                        top6_markov_hybrid(subset_df) if metode == "Markov Gabungan" else
+                        top6_lstm(subset_df, lokasi=selected_lokasi) if metode == "LSTM AI" else
+                        top6_ensemble(subset_df, lokasi=selected_lokasi)
                     )
                     if pred is None:
                         continue
 
                     actual = f"{int(uji_df.iloc[i]['angka']):04d}"
                     skor = 0
-                    for j, label in enumerate(labels_acc):
+                    for j, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
                         if int(actual[j]) in pred[j]:
                             skor += 1
                             digit_acc[label].append(1)
