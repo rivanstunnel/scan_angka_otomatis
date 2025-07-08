@@ -55,7 +55,9 @@ if selected_lokasi and selected_hari:
     try:
         with st.spinner("🔄 Mengambil data dari API..."):
             url = f"https://wysiwygscan.com/api?pasaran={selected_lokasi.lower()}&hari={selected_hari}&putaran={putaran}&format=json&urut=asc"
-            headers = {"Authorization": "Bearer 6705327a2c9a9135f2c8fbad19f09b46"}
+            # Menggunakan st.secrets untuk keamanan
+            api_key = st.secrets["wysiwyg_api_key"]
+            headers = {"Authorization": f"Bearer {api_key}"}
             response = requests.get(url, headers=headers)
             data = response.json()
             angka_list = [item["result"] for item in data.get("data", []) if len(item["result"]) == 4 and item["result"].isdigit()]
