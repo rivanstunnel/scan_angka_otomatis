@@ -4,11 +4,10 @@ import streamlit as st
 import pandas as pd
 import requests
 import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
+import re
 from itertools import product
 
-# Impor fungsi-fungsi dari file model. Impor dari ai_model.py sudah dihapus.
+# Impor fungsi-fungsi dari file model.
 from markov_model import (
     predict_markov,
     predict_markov_order2,
@@ -21,10 +20,13 @@ st.set_page_config(page_title="Prediksi 4D Markov", layout="wide")
 
 # Fungsi untuk memuat animasi Lottie
 def load_lottieurl(url):
-    r = requests.get(url)
-    if r.status_code != 200:
+    try:
+        r = requests.get(url, timeout=10)
+        if r.status_code != 200:
+            return None
+        return r.json()
+    except requests.exceptions.RequestException:
         return None
-    return r.json()
 
 lottie_predict = load_lottieurl("https://assets2.lottiefiles.com/packages/lf20_kkflmtur.json")
 if lottie_predict:
@@ -33,59 +35,88 @@ if lottie_predict:
 st.title("🔮 Prediksi 4D - Metode Markov")
 
 # --- Daftar Opsi ---
-# Metode AI telah dihapus dari list ini
-hari_list = ["harian", "kemarin", "2hari", "3hari", "4hari", "5hari"]
 metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
 
 # --- Sidebar ---
 with st.sidebar:
     st.header("⚙️ Pengaturan")
-    selected_lokasi = st.selectbox("🌍 Pilih Pasaran", lokasi_list)
-    selected_hari = st.selectbox("📅 Pilih Hari", hari_list)
-    putaran = st.number_input("🔁 Jumlah Putaran", min_value=1, max_value=1000, value=100)
+    
+    # ==== FITUR BARU: Pilihan Sumber Data ====
+    data_source = st.radio(
+        " sumber Data",
+        ("API", "Input Manual"),
+        horizontal=True,
+    )
+    
+    # Kontrol yang muncul berdasarkan pilihan sumber data
+    if data_source == "API":
+        hari_list = ["harian", "kemarin", "2hari", "3hari", "4hari", "5hari"]
+        selected_lokasi = st.selectbox("🌍 Pilih Pasaran", lokasi_list)
+        selected_hari = st.selectbox("📅 Pilih Hari", hari_list)
+    else: # data_source == "Input Manual"
+        manual_data_input = st.text_area(
+            "📋 Masukkan Data Keluaran",
+            height=150,
+            placeholder="Contoh: 1234 5678, 9012\nPisahkan angka dengan spasi, koma, atau baris baru."
+        )
+
+    st.divider()
+    putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", min_value=1, max_value=1000, value=100)
     jumlah_uji = st.number_input("📊 Data Uji Akurasi", min_value=1, max_value=200, value=10)
     metode = st.selectbox("🧠 Metode Prediksi", metode_list)
     top_n = st.number_input("🔢 Jumlah Top Digit Prediksi", min_value=1, max_value=9, value=6)
 
-    st.divider()
-    if st.button("🔍 Cari Putaran Terbaik"):
-        if 'df_data' not in st.session_state or len(st.session_state.df_data) < 30:
-            st.warning("❌ Butuh minimal 30 data dari API untuk fitur ini.")
-        else:
-            st.session_state.run_best_putaran_search = True
+# --- Logika Pengambilan dan Pemrosesan Data ---
+# Dijalankan berdasarkan pilihan di sidebar
 
-# --- Logika Pengambilan Data ---
-query_id = f"{selected_lokasi}-{selected_hari}"
-if 'df_data' not in st.session_state or st.session_state.get('last_query') != query_id:
-    with st.spinner("🔄 Mengambil data dari API..."):
-        try:
-            url = f"https://wysiwygscan.com/api?pasaran={selected_lokasi.lower()}&hari={selected_hari}&putaran=1000&format=json&urut=asc"
-            headers = {"Authorization": "Bearer 6705327a2c9a9135f2c8fbad19f09b46"}
-            response = requests.get(url, headers=headers)
-            response.raise_for_status()
-            data = response.json()
-            all_angka = [item["result"] for item in data.get("data", []) if len(item["result"]) == 4 and item["result"].isdigit()]
-            st.session_state.df_data = pd.DataFrame({"angka": all_angka})
-            st.session_state.last_query = query_id
-            st.success(f"✅ Total {len(st.session_state.df_data)} data berhasil diambil.")
-        except Exception as e:
-            st.error(f"❌ Gagal ambil data API: {e}")
-            st.session_state.df_data = pd.DataFrame({"angka": []})
+# 1. Logika untuk Sumber Data API
+if data_source == "API":
+    query_id = f"{selected_lokasi}-{selected_hari}"
+    if 'df_data' not in st.session_state or st.session_state.get('last_query') != query_id:
+        with st.spinner(f"🔄 Mengambil data untuk pasaran {selected_lokasi}..."):
+            try:
+                url = f"https://wysiwygscan.com/api?pasaran={selected_lokasi.lower()}&hari={selected_hari}&putaran=1000&format=json&urut=asc"
+                headers = {"Authorization": "Bearer 6705327a2c9a9135f2c8fbad19f09b46"}
+                response = requests.get(url, headers=headers, timeout=20)
+                response.raise_for_status()
+                data = response.json()
+                all_angka = [item["result"] for item in data.get("data", []) if len(item["result"]) == 4 and item["result"].isdigit()]
+                st.session_state.df_data = pd.DataFrame({"angka": all_angka})
+                st.session_state.last_query = query_id
+                st.success(f"✅ Total {len(st.session_state.df_data)} data berhasil diambil dari API.")
+            except Exception as e:
+                st.error(f"❌ Gagal ambil data API: {e}")
+                st.session_state.df_data = pd.DataFrame({"angka": []})
 
+# 2. Logika untuk Sumber Data Manual
+elif data_source == "Manual":
+    # Hanya proses ulang jika teks di dalam box berubah
+    if st.session_state.get('last_manual_input') != manual_data_input:
+        # Menggunakan regex untuk menemukan semua angka 4 digit
+        angka_list = re.findall(r'\b\d{4}\b', manual_data_input)
+        
+        # Simpan ke session state
+        st.session_state.df_data = pd.DataFrame({"angka": angka_list})
+        st.session_state.last_manual_input = manual_data_input
+        st.session_state.last_query = "manual" # Tandai bahwa sumbernya manual
+        if angka_list:
+            st.success(f"✅ Total {len(angka_list)} data berhasil diproses dari input manual.")
+
+# Mengambil data dari session state untuk digunakan di seluruh aplikasi
 df = st.session_state.get('df_data', pd.DataFrame()).tail(putaran)
 
-with st.expander(f"✅ Menampilkan {len(df)} data terakhir yang digunakan."):
-    st.code("\n".join(df['angka'].tolist()), language="text")
+# Tampilkan data yang digunakan jika ada
+if not df.empty:
+    with st.expander(f"✅ Menampilkan {len(df)} data terakhir yang digunakan."):
+        st.code("\n".join(df['angka'].tolist()), language="text")
 
 # --- Tombol Prediksi Utama ---
 if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
-    st.session_state.run_best_putaran_search = False
     if len(df) < 11:
         st.warning("❌ Minimal 11 data diperlukan untuk prediksi.")
     else:
         with st.spinner("⏳ Melakukan prediksi..."):
             result = None
-            # Logika prediksi disederhanakan, hanya metode Markov yang tersisa
             if metode == "Markov": result, _ = predict_markov(df, top_n=top_n)
             elif metode == "Markov Order-2": result = predict_markov_order2(df, top_n=top_n)
             elif metode == "Markov Gabungan": result = predict_markov_hybrid(df, top_n=top_n)
@@ -95,11 +126,14 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
         else:
             st.subheader(f"🎯 Hasil Prediksi Top {top_n} Digit")
             labels = ["As", "Kop", "Kepala", "Ekor"]
+            cols = st.columns(4)
             for i, label in enumerate(labels):
-                st.markdown(f"#### **{label}:** {', '.join(map(str, result[i]))}")
+                with cols[i]:
+                    st.metric(label, ", ".join(map(str, result[i])))
 
             st.divider()
             with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
+                # (Sisa kode untuk kombinasi dan evaluasi tidak berubah)
                 kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
                 kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
                 kombinasi_2d_list = ["".join(map(str, p)) for p in product(*result[2:])]
@@ -113,118 +147,42 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
 
                 with tab4d:
                     st.text_area("Hasil 4D (As-Kop-Kepala-Ekor)", text_4d, height=200)
-                    st.download_button("Unduh 4D.txt", text_4d, file_name=f"hasil_4d_{selected_lokasi.lower()}.txt")
+                    st.download_button("Unduh 4D.txt", text_4d, file_name="hasil_4d.txt")
 
                 with tab3d:
                     st.text_area("Hasil 3D (Kop-Kepala-Ekor)", text_3d, height=200)
-                    st.download_button("Unduh 3D.txt", text_3d, file_name=f"hasil_3d_{selected_lokasi.lower()}.txt")
+                    st.download_button("Unduh 3D.txt", text_3d, file_name="hasil_3d.txt")
 
                 with tab2d:
                     st.text_area("Hasil 2D (Kepala-Ekor)", text_2d, height=200)
-                    st.download_button("Unduh 2D.txt", text_2d, file_name=f"hasil_2d_{selected_lokasi.lower()}.txt")
+                    st.download_button("Unduh 2D.txt", text_2d, file_name="hasil_2d.txt")
 
-        st.subheader("🔍 Evaluasi Akurasi Model")
-        with st.spinner("📏 Menghitung akurasi..."):
-            # ... (Logika evaluasi akurasi juga disederhanakan) ...
-            uji_df = df.tail(min(jumlah_uji, len(df)))
-            total_eval, benar_eval, benar_eval_top1 = 0, 0, 0
-            akurasi_list = []
-            labels = ["As", "Kop", "Kepala", "Ekor"]
-            digit_acc = {label: [] for label in labels}
-            digit_acc_top1 = {label: [] for label in labels}
+            # Blok Evaluasi Akurasi
+            st.subheader("🔍 Evaluasi Akurasi Model")
+            with st.spinner("📏 Menghitung akurasi..."):
+                uji_df = df.tail(min(jumlah_uji, len(df)))
+                total_eval, benar_eval = 0, 0
+                
+                if len(uji_df) > 0:
+                    for i in range(len(uji_df)):
+                        subset_df = df.iloc[:-(len(uji_df) - i)]
+                        if len(subset_df) < 11: continue
+                        try:
+                            pred_eval = None
+                            if metode == "Markov": pred_eval, _ = predict_markov(subset_df, top_n=top_n)
+                            elif metode == "Markov Order-2": pred_eval = predict_markov_order2(subset_df, top_n=top_n)
+                            elif metode == "Markov Gabungan": pred_eval = predict_markov_hybrid(subset_df, top_n=top_n)
 
-            for i in range(len(uji_df)):
-                subset_df = df.iloc[:-(len(uji_df) - i)]
-                if len(subset_df) < 11: continue
-                try:
-                    pred_eval = None
-                    if metode == "Markov": pred_eval, _ = predict_markov(subset_df, top_n=top_n)
-                    elif metode == "Markov Order-2": pred_eval = predict_markov_order2(subset_df, top_n=top_n)
-                    elif metode == "Markov Gabungan": pred_eval = predict_markov_hybrid(subset_df, top_n=top_n)
+                            if pred_eval is None: continue
+                            actual_eval = f"{int(uji_df.iloc[i]['angka']):04d}"
+                            
+                            for k in range(4):
+                                if int(actual_eval[k]) in pred_eval[k]:
+                                    benar_eval += 1
+                            total_eval += 4
+                        except Exception: continue
 
-                    if pred_eval is None: continue
-                    actual_eval = f"{int(uji_df.iloc[i]['angka']):04d}"
-                    skor, skor_top1 = 0, 0
-                    for j, label in enumerate(labels):
-                        if int(actual_eval[j]) in pred_eval[j]:
-                            skor += 1
-                            digit_acc[label].append(1)
-                        else:
-                            digit_acc[label].append(0)
-
-                        if int(actual_eval[j]) == pred_eval[j][0]:
-                            skor_top1 += 1
-                            digit_acc_top1[label].append(1)
-                        else:
-                            digit_acc_top1[label].append(0)
-
-                    total_eval += 4
-                    benar_eval += skor
-                    benar_eval_top1 += skor_top1
-                    akurasi_list.append(skor / 4 * 100)
-                except Exception: continue
-
-            if total_eval > 0:
-                st.success(f"**📈 Akurasi Rata-rata (Top-{top_n})**: `{benar_eval / total_eval * 100:.2f}%`")
-                # ... (Sisa kode visualisasi akurasi tetap sama) ...
-            else:
-                st.warning("⚠️ Tidak cukup data historis untuk melakukan evaluasi akurasi.")
-
-
-# --- Logika Pencarian Putaran Terbaik ---
-if st.session_state.get('run_best_putaran_search', False):
-    with st.spinner("Menganalisis putaran terbaik, ini akan memakan waktu..."):
-        # ... (Logika pencarian putaran terbaik juga disederhanakan) ...
-        full_df = st.session_state.df_data
-        putaran_results = {}
-        max_putaran = len(full_df)
-        test_range = list(range(20, max_putaran, 10))
-        if max_putaran not in test_range:
-            test_range.append(max_putaran)
-
-        progress_bar = st.progress(0, text="Menganalisis...")
-        for i, p in enumerate(test_range):
-            df_slice = full_df.tail(p)
-            uji_df_slice = df_slice.tail(min(jumlah_uji, len(df_slice)))
-            total, benar = 0, 0
-
-            if len(uji_df_slice) > 0:
-                for j in range(len(uji_df_slice)):
-                    subset_df = df_slice.iloc[:-(len(uji_df_slice) - j)]
-                    if len(subset_df) < 11: continue
-                    try:
-                        pred = None
-                        if metode == "Markov": pred, _ = predict_markov(subset_df, top_n=top_n)
-                        elif metode == "Markov Order-2": pred = predict_markov_order2(subset_df, top_n=top_n)
-                        elif metode == "Markov Gabungan": pred = predict_markov_hybrid(subset_df, top_n=top_n)
-                        
-                        if pred is None: continue
-                        actual = f"{int(uji_df_slice.iloc[j]['angka']):04d}"
-                        for k in range(4):
-                            if int(actual[k]) in pred[k]:
-                                benar += 1
-                        total += 4
-                    except Exception: continue
-            
-            accuracy = (benar / total * 100) if total > 0 else 0
-            if accuracy > 0:
-                putaran_results[p] = accuracy
-            progress_bar.progress((i + 1) / len(test_range), text=f"Menganalisis {p} putaran...")
-        
-        progress_bar.empty()
-        if not putaran_results:
-            st.error("Tidak dapat menemukan hasil akurasi. Coba dengan metode atau data yang berbeda.")
-        else:
-            best_putaran = max(putaran_results, key=putaran_results.get)
-            best_accuracy = putaran_results[best_putaran]
-            
-            st.subheader("🏆 Hasil Analisis Putaran")
-            m1, m2 = st.columns(2)
-            m1.metric("Putaran Terbaik", f"{best_putaran} Data", "Jumlah data historis")
-            m2.metric("Akurasi Tertinggi", f"{best_accuracy:.2f}%", f"Dengan {best_putaran} data")
-            
-            chart_data = pd.DataFrame.from_dict(putaran_results, orient='index', columns=['Akurasi'])
-            chart_data.index.name = 'Jumlah Putaran'
-            st.line_chart(chart_data)
-
-    st.session_state.run_best_putaran_search = False
+                if total_eval > 0:
+                    st.success(f"**📈 Akurasi Rata-rata (Top-{top_n})**: `{benar_eval / total_eval * 100:.2f}%`")
+                else:
+                    st.warning("⚠️ Tidak cukup data untuk melakukan evaluasi akurasi.")
