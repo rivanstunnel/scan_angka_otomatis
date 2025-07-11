@@ -78,10 +78,8 @@ def predict_markov_order2(df, top_n=6):
     result = [np.argsort(probs)[-top_n:][::-1] for probs in avg_probs]
     return result
 
-# ==== PERUBAHAN DI SINI ====
-# Nama fungsi diubah dari 'predict_markov_hybrid' menjadi 'top_n_markov_hybrid'
-# agar sesuai dengan yang diimpor oleh file ai_model.py
-def top_n_markov_hybrid(df, top_n=6):
+
+def predict_markov_hybrid(df, top_n=6):
     """
     Menggabungkan hasil dari Markov Order-1 dan Order-2.
     """
