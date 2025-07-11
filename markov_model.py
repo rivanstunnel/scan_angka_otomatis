@@ -39,9 +39,9 @@ def predict_markov(df, top_n=6):
     avg_probs[2] = prob_trans[1].mean(axis=0)
     avg_probs[3] = prob_trans[2].mean(axis=0)
     
-    # ==== DIKEMBALIKAN: Menggunakan argsort untuk hasil yang stabil dan terurut ====
     result = [np.argsort(probs)[-top_n:][::-1] for probs in avg_probs]
     
+    # Fungsi ini sudah benar, mengembalikan hasil dan probabilitas
     return result, avg_probs
 
 
@@ -51,7 +51,7 @@ def predict_markov_order2(df, top_n=6):
     """
     digits = _get_digits(df)
     if digits.shape[0] < 2:
-        return None
+        return None, None # Diperbaiki agar konsisten
 
     freq_ribuan = np.zeros(10)
     trans_ratusan = np.zeros((10, 10))
@@ -76,9 +76,10 @@ def predict_markov_order2(df, top_n=6):
     sum_satuan = trans_satuan.sum(axis=2, keepdims=True)
     avg_probs[3] = (trans_satuan / (sum_satuan + 1e-6)).mean(axis=(0, 1))
 
-    # ==== DIKEMBALIKAN: Menggunakan argsort untuk hasil yang stabil dan terurut ====
     result = [np.argsort(probs)[-top_n:][::-1] for probs in avg_probs]
-    return result
+    
+    # ==== PERBAIKAN: Selalu kembalikan probabilitas juga ====
+    return result, avg_probs
 
 
 def predict_markov_hybrid(df, top_n=6):
@@ -87,10 +88,10 @@ def predict_markov_hybrid(df, top_n=6):
     """
     digits = _get_digits(df)
     if digits.shape[0] < 2:
-        return None
+        return None, None # Diperbaiki agar konsisten
 
     _, probs_o1 = predict_markov(df, top_n=10)
-    if probs_o1 is None: return None
+    if probs_o1 is None: return None, None
     
     freq_ribuan = np.zeros(10)
     trans_ratusan = np.zeros((10, 10))
@@ -110,7 +111,7 @@ def predict_markov_hybrid(df, top_n=6):
 
     hybrid_probs = (probs_o1 + probs_o2) / 2.0
     
-    # ==== DIKEMBALIKAN: Menggunakan argsort untuk hasil yang stabil dan terurut ====
     result = [np.argsort(probs)[-top_n:][::-1] for probs in hybrid_probs]
-        
-    return result
+    
+    # ==== PERBAIKAN: Selalu kembalikan probabilitas juga ====
+    return result, hybrid_probs
