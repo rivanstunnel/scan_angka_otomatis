@@ -35,21 +35,37 @@ if 'prediction_data' not in st.session_state:
 if 'last_query' not in st.session_state:
     st.session_state.last_query = ""
 
-# Fungsi baru untuk menghitung Colok
+# ==== FUNGSI PERHITUNGAN COLOK DENGAN LOGIKA BARU UNTUK MAKAU / CM ====
 def calculate_colok(probabilities):
     if probabilities is None:
         return [], []
     
+    # Hitung total probabilitas (kekuatan) untuk setiap digit (0-9)
     total_probs = np.sum(probabilities, axis=0)
     
-    # Colok Bebas (CB): Ambil 3 digit dengan total probabilitas tertinggi
-    top_3_cb_digits = np.argsort(total_probs)[-3:][::-1]
+    # --- Colok Bebas (CB): Ambil 3 digit terkuat ---
+    top_3_cb_digits = np.argsort(total_probs)[-3:][::-1].tolist()
     
-    # Colok Macau (CM): Buat 3 kombinasi pasangan dari 3 digit CB teratas
-    cm_pairs = list(combinations(top_3_cb_digits, 2))
-    formatted_cm_pairs = [f"{p[0]}{p[1]}" for p in cm_pairs]
+    # --- Colok Macau (CM): Logika Baru ---
+    # 1. Buat semua kemungkinan pasangan unik dari digit 0-9
+    all_digit_pairs = list(combinations(range(10), 2))
+    
+    # 2. Beri skor setiap pasangan berdasarkan jumlah total probabilitas kedua digitnya
+    scored_cm_pairs = []
+    for pair in all_digit_pairs:
+        digit1, digit2 = pair
+        score = total_probs[digit1] + total_probs[digit2]
+        scored_cm_pairs.append({'pair': pair, 'score': score})
+        
+    # 3. Urutkan pasangan dari skor tertinggi ke terendah dan ambil 3 teratas
+    top_3_cm = sorted(scored_cm_pairs, key=lambda x: x['score'], reverse=True)[:3]
+    
+    # 4. Format hasilnya untuk ditampilkan
+    formatted_cm_pairs = [f"{item['pair'][0]}{item['pair'][1]}" for item in top_3_cm]
 
-    return top_3_cb_digits.tolist(), formatted_cm_pairs
+    return top_3_cb_digits, formatted_cm_pairs
+
+# --- (Sisa kode tidak ada perubahan signifikan) ---
 
 def load_lottieurl(url):
     try:
@@ -67,7 +83,6 @@ st.title("📊 Analisis Prediksi 4D")
 
 metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
 
-# --- Sidebar ---
 with st.sidebar:
     st.header("⚙️ Pengaturan")
     data_source = st.radio(
@@ -95,7 +110,6 @@ with st.sidebar:
     metode = st.selectbox("🧠 Metode Analisis", metode_list, on_change=reset_prediction_only)
     top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 8, on_change=reset_prediction_only)
 
-# --- Logika Pengambilan & Pemrosesan Data ---
 if data_source == "API":
     query_id = f"{selected_lokasi}-{selected_hari}"
     if st.session_state.get('last_query') != query_id:
@@ -120,7 +134,6 @@ if not df.empty:
     with st.expander(f"✅ Menampilkan {len(df)} data terakhir yang digunakan.", expanded=False):
         st.code("\n".join(df['angka'].tolist()), language="text")
 
-# --- Tombol dan Logika Analisis ---
 if st.button("📈 Analisis Sekarang!", use_container_width=True):
     if st.session_state.get('prediction_data') is None:
         if len(df) < 11:
@@ -138,7 +151,6 @@ if st.button("📈 Analisis Sekarang!", use_container_width=True):
     else:
         st.info("ℹ️ Hasil analisis sudah ditampilkan. Ubah pengaturan untuk analisis baru.")
 
-# --- Tampilkan Hasil ---
 if st.session_state.get('prediction_data') is not None:
     prediction_data = st.session_state.prediction_data
     result = prediction_data["result"]
