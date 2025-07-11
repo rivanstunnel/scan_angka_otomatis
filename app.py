@@ -18,29 +18,13 @@ from streamlit_lottie import st_lottie
 
 st.set_page_config(page_title="Analisis Prediksi 4D", layout="wide")
 
-# Fungsi untuk mereset status
-def reset_data_and_prediction():
-    st.session_state.df_data = pd.DataFrame()
-    st.session_state.prediction_data = None
-    st.session_state.last_query = ""
-    st.session_state.run_putaran_analysis = False
-
-
-def reset_prediction_only():
-    st.session_state.prediction_data = None
-    st.session_state.run_putaran_analysis = False
-
-# Inisialisasi session_state
+# Inisialisasi session_state jika belum ada
 if 'df_data' not in st.session_state:
     st.session_state.df_data = pd.DataFrame()
 if 'prediction_data' not in st.session_state:
     st.session_state.prediction_data = None
-if 'last_query' not in st.session_state:
-    st.session_state.last_query = ""
-if 'run_putaran_analysis' not in st.session_state:
-    st.session_state.run_putaran_analysis = False
 
-# Fungsi baru untuk menghitung Colok
+# Fungsi untuk menghitung Colok
 def calculate_colok(probabilities):
     if probabilities is None:
         return [], []
@@ -75,14 +59,33 @@ metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
 with st.sidebar:
     st.header("⚙️ Pengaturan")
     data_source = st.radio(
-        "Sumber Data", ("API", "Input Manual"), horizontal=True,
-        on_change=reset_data_and_prediction, key='data_source_selector'
+        "Sumber Data", ("API", "Input Manual"), horizontal=True, key='data_source_selector'
     )
+    
     if data_source == "API":
         hari_list = ["harian", "kemarin", "2hari", "3hari", "4hari", "5hari"]
-        selected_lokasi = st.selectbox("🌍 Pilih Pasaran", lokasi_list, on_change=reset_data_and_prediction)
-        selected_hari = st.selectbox("📅 Pilih Hari", hari_list, on_change=reset_data_and_prediction)
-    else:
+        selected_lokasi = st.selectbox("🌍 Pilih Pasaran", lokasi_list)
+        selected_hari = st.selectbox("📅 Pilih Hari", hari_list)
+        
+        # ==== PERBAIKAN: Tombol untuk memuat data API secara eksplisit ====
+        if st.button("Muat Data API"):
+            with st.spinner(f"🔄 Mengambil data untuk {selected_lokasi}..."):
+                try:
+                    url = f"https://wysiwygscan.com/api?pasaran={selected_lokasi.lower()}&hari={selected_hari}&putaran=1000&format=json&urut=asc"
+                    headers = {"Authorization": "Bearer 6705327a2c9a9135f2c8fbad19f09b46"}
+                    response = requests.get(url, headers=headers, timeout=20)
+                    response.raise_for_status()
+                    data = response.json()
+                    all_angka = [item["result"] for item in data.get("data", []) if len(item["result"]) == 4 and item["result"].isdigit()]
+                    st.session_state.df_data = pd.DataFrame({"angka": all_angka})
+                    # Hapus hasil prediksi lama jika ada
+                    st.session_state.prediction_data = None
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Gagal ambil data API: {e}")
+                    st.session_state.df_data = pd.DataFrame()
+
+    else: # Input Manual
         manual_data_input = st.text_area(
             "📋 Masukkan Data Keluaran", height=150,
             placeholder="Contoh: 1234 5678, 9012..."
@@ -90,32 +93,54 @@ with st.sidebar:
         if st.button("Proses Data Manual"):
             angka_list = re.findall(r'\b\d{4}\b', manual_data_input)
             st.session_state.df_data = pd.DataFrame({"angka": angka_list})
-            st.session_state.last_query = "manual"
-            reset_prediction_only()
+            # Hapus hasil prediksi lama jika ada
+            st.session_state.prediction_data = None
             st.rerun()
 
     st.divider()
-    putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", 1, 1000, 100, on_change=reset_prediction_only)
-    metode = st.selectbox("🧠 Metode Analisis", metode_list, on_change=reset_prediction_only)
-    top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 8, on_change=reset_prediction_only)
+    putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", 1, 1000, 100)
+    metode = st.selectbox("🧠 Metode Analisis", metode_list)
+    top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 8)
     
     st.divider()
     st.header("🔬 Analisis Lanjutan")
-    
-    # ==== PERBAIKAN 1: Label input lebih jelas dengan tooltip (bantuan) ====
     jumlah_uji = st.number_input(
         "📊 Jml Data untuk Back-testing", 1, 200, 10,
-        help="Berapa banyak data terakhir yang akan dijadikan 'kunci jawaban' untuk menguji akurasi setiap skenario putaran. Contoh: jika 10, maka 10 data terakhir akan diuji."
+        help="Berapa banyak data terakhir yang akan dijadikan 'kunci jawaban' untuk menguji akurasi setiap skenario putaran."
     )
-
     if st.button("🔍 Analisis Putaran Terbaik"):
-        # ==== PERBAIKAN 2: Pesan peringatan lebih informatif ====
         total_data_saat_ini = len(st.session_state.get('df_data', []))
         if total_data_saat_ini < 30:
             st.warning(f"Butuh minimal 30 data riwayat. Saat ini hanya ada **{total_data_saat_ini}** data yang dimuat.")
         else:
             st.session_state.run_putaran_analysis = True
-            reset_prediction_only() # Hapus hasil prediksi lama
+            st.session_state.prediction_data = None # Hapus hasil prediksi utama
 
-# --- (Sisa kode tidak ada perubahan) ---
-# ...
+# Data Frame yang akan digunakan oleh seluruh aplikasi
+df = st.session_state.get('df_data', pd.DataFrame()).tail(putaran)
+
+if not df.empty:
+    with st.expander(f"✅ Menampilkan {len(df)} data terakhir yang digunakan.", expanded=True):
+        st.code("\n".join(df['angka'].tolist()), language="text")
+
+
+if st.button("📈 Analisis Sekarang!", use_container_width=True):
+    # Logika untuk menjalankan analisis utama
+    if len(df) < 11:
+        st.warning("❌ Minimal 11 data diperlukan untuk analisis.")
+    else:
+        with st.spinner("⏳ Melakukan analisis..."):
+            result, probs = None, None
+            if metode == "Markov": result, probs = predict_markov(df, top_n=top_n)
+            elif metode == "Markov Order-2": result, probs = predict_markov_order2(df, top_n=top_n)
+            elif metode == "Markov Gabungan": result, probs = predict_markov_hybrid(df, top_n=top_n)
+            
+            if result is not None:
+                st.session_state.prediction_data = {"result": result, "probs": probs}
+            st.rerun()
+
+if st.session_state.get('prediction_data') is not None:
+    # ... Tampilkan hasil analisis utama, CB, dan CM ...
+
+if st.session_state.get('run_putaran_analysis', False):
+    # ... Logika untuk analisis putaran terbaik ...
