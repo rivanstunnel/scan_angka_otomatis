@@ -16,7 +16,7 @@ from markov_model import (
 from lokasi_list import lokasi_list
 from streamlit_lottie import st_lottie
 
-st.set_page_config(page_title="Prediksi 4D Markov", layout="wide")
+st.set_page_config(page_title="Analisis Prediksi 4D", layout="wide")
 
 # Fungsi untuk mereset status
 def reset_data_and_prediction():
@@ -46,11 +46,13 @@ def load_lottieurl(url):
     except requests.exceptions.RequestException:
         return None
 
-lottie_predict = load_lottieurl("https://assets2.lottiefiles.com/packages/lf20_kkflmtur.json")
+lottie_predict = load_lottieurl("https://assets9.lottiefiles.com/packages/lf20_gfrw22im.json")
 if lottie_predict:
     st_lottie(lottie_predict, speed=1, height=150, key="prediksi")
 
-st.title("🔮 Prediksi 4D - Metode Markov")
+# ==== PERUBAHAN: Judul aplikasi telah diubah ====
+st.title("📊 Analisis Prediksi 4D")
+
 
 metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
 
@@ -81,8 +83,8 @@ with st.sidebar:
 
     st.divider()
     putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", 1, 1000, 100, on_change=reset_prediction_only)
-    metode = st.selectbox("🧠 Metode Prediksi", metode_list, on_change=reset_prediction_only)
-    top_n = st.number_input("🔢 Jumlah Top Digit Prediksi", 1, 9, 8, on_change=reset_prediction_only)
+    metode = st.selectbox("🧠 Metode Analisis", metode_list, on_change=reset_prediction_only)
+    top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 8, on_change=reset_prediction_only)
 
 # --- Logika Pengambilan & Pemrosesan Data ---
 if data_source == "API":
@@ -106,17 +108,16 @@ if data_source == "API":
 df = st.session_state.get('df_data', pd.DataFrame()).tail(putaran)
 
 if not df.empty:
-    # ==== PERBAIKAN: Mengubah expanded=True menjadi expanded=False ====
     with st.expander(f"✅ Menampilkan {len(df)} data terakhir yang digunakan.", expanded=False):
         st.code("\n".join(df['angka'].tolist()), language="text")
 
-# --- Tombol dan Logika Prediksi ---
-if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
+# --- Tombol dan Logika Analisis ---
+if st.button("📈 Analisis Sekarang!", use_container_width=True):
     if st.session_state.get('result') is None:
         if len(df) < 11:
-            st.warning("❌ Minimal 11 data diperlukan untuk prediksi.")
+            st.warning("❌ Minimal 11 data diperlukan untuk analisis.")
         else:
-            with st.spinner("⏳ Melakukan prediksi..."):
+            with st.spinner("⏳ Melakukan analisis..."):
                 result = None
                 if metode == "Markov": result, _ = predict_markov(df, top_n=top_n)
                 elif metode == "Markov Order-2": result = predict_markov_order2(df, top_n=top_n)
@@ -124,12 +125,12 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
                 st.session_state.result = result
                 st.rerun()
     else:
-        st.info("ℹ️ Hasil prediksi sudah ditampilkan. Ubah pengaturan untuk prediksi baru.")
+        st.info("ℹ️ Hasil analisis sudah ditampilkan. Ubah pengaturan untuk analisis baru.")
 
 # --- Tampilkan Hasil ---
 if st.session_state.get('result') is not None:
     result = st.session_state.result
-    st.subheader(f"🎯 Hasil Prediksi Top {top_n} Digit")
+    st.subheader(f"🎯 Hasil Analisis Top {top_n} Digit")
     labels = ["As", "Kop", "Kepala", "Ekor"]
     
     for i, label in enumerate(labels):
