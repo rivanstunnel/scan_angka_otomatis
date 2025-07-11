@@ -101,80 +101,21 @@ with st.sidebar:
     
     st.divider()
     st.header("🔬 Analisis Lanjutan")
-    # ==== MENU BARU 1: Input untuk data uji ====
-    jumlah_uji = st.number_input("📊 Data Uji Analisis Putaran", 1, 200, 10)
+    
+    # ==== PERBAIKAN 1: Label input lebih jelas dengan tooltip (bantuan) ====
+    jumlah_uji = st.number_input(
+        "📊 Jml Data untuk Back-testing", 1, 200, 10,
+        help="Berapa banyak data terakhir yang akan dijadikan 'kunci jawaban' untuk menguji akurasi setiap skenario putaran. Contoh: jika 10, maka 10 data terakhir akan diuji."
+    )
 
-    # ==== MENU BARU 2: Tombol untuk memulai analisis putaran ====
     if st.button("🔍 Analisis Putaran Terbaik"):
-        if 'df_data' not in st.session_state or len(st.session_state.df_data) < 30:
-            st.warning("Butuh minimal 30 data untuk fitur ini.")
+        # ==== PERBAIKAN 2: Pesan peringatan lebih informatif ====
+        total_data_saat_ini = len(st.session_state.get('df_data', []))
+        if total_data_saat_ini < 30:
+            st.warning(f"Butuh minimal 30 data riwayat. Saat ini hanya ada **{total_data_saat_ini}** data yang dimuat.")
         else:
             st.session_state.run_putaran_analysis = True
             reset_prediction_only() # Hapus hasil prediksi lama
 
-# --- (Sisa kode sebagian besar tetap sama) ---
-# ... (Logika Pengambilan Data) ...
-# ... (Tombol Analisis Sekarang!) ...
-# ... (Tampilkan Hasil) ...
-
-# ==== LOGIKA BARU: Menjalankan analisis putaran jika tombol ditekan ====
-if st.session_state.get('run_putaran_analysis', False):
-    st.header("🔬 Hasil Analisis Putaran Terbaik")
-    with st.spinner("Menganalisis berbagai jumlah putaran, ini mungkin memakan waktu..."):
-        full_df = st.session_state.df_data
-        putaran_results = {}
-        
-        # Tentukan rentang putaran yang akan diuji
-        max_putaran = len(full_df) - jumlah_uji
-        test_range = list(range(20, max_putaran, 10))
-        if max_putaran not in test_range and max_putaran > 20:
-            test_range.append(max_putaran)
-
-        progress_bar = st.progress(0, text="Memulai analisis...")
-        
-        # Loop untuk setiap nilai putaran
-        for i, p in enumerate(test_range):
-            df_slice = full_df.tail(p + jumlah_uji)
-            uji_df_slice = df_slice.tail(jumlah_uji)
-            train_df_slice = df_slice.head(p)
-
-            total, benar = 0, 0
-            
-            # Lakukan back-testing
-            if len(uji_df_slice) > 0:
-                pred, _ = None, None
-                if metode == "Markov": pred, _ = predict_markov(train_df_slice, top_n=top_n)
-                elif metode == "Markov Order-2": pred, _ = predict_markov_order2(train_df_slice, top_n=top_n)
-                elif metode == "Markov Gabungan": pred, _ = predict_markov_hybrid(train_df_slice, top_n=top_n)
-                
-                if pred is not None:
-                    for _, row in uji_df_slice.iterrows():
-                        actual = f"{int(row['angka']):04d}"
-                        for k in range(4):
-                            if int(actual[k]) in pred[k]:
-                                benar += 1
-                        total += 4
-            
-            accuracy = (benar / total * 100) if total > 0 else 0
-            if accuracy > 0:
-                putaran_results[p] = accuracy
-            progress_bar.progress((i + 1) / len(test_range), text=f"Menganalisis {p} putaran...")
-        
-        progress_bar.empty()
-
-    if not putaran_results:
-        st.error("Tidak dapat menemukan hasil akurasi. Coba dengan metode atau data yang berbeda.")
-    else:
-        best_putaran = max(putaran_results, key=putaran_results.get)
-        best_accuracy = putaran_results[best_putaran]
-        
-        st.subheader("🏆 Rekomendasi Penggunaan Data")
-        m1, m2 = st.columns(2)
-        m1.metric("Putaran Terbaik", f"{best_putaran} Data", "Jumlah data historis")
-        m2.metric("Akurasi Tertinggi", f"{best_accuracy:.2f}%", f"Dengan {best_putaran} data")
-        
-        chart_data = pd.DataFrame.from_dict(putaran_results, orient='index', columns=['Akurasi (%)'])
-        chart_data.index.name = 'Jumlah Putaran Digunakan'
-        st.line_chart(chart_data)
-    
-    st.session_state.run_putaran_analysis = False
+# --- (Sisa kode tidak ada perubahan) ---
+# ...
