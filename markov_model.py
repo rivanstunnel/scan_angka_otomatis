@@ -39,7 +39,19 @@ def predict_markov(df, top_n=6):
     avg_probs[2] = prob_trans[1].mean(axis=0)
     avg_probs[3] = prob_trans[2].mean(axis=0)
     
-    result = [np.argsort(probs)[-top_n:][::-1] for probs in avg_probs]
+    # ==== PERUBAHAN LOGIKA PREDIKSI: DARI URUTAN BIASA MENJADI ACAK BERBOBOT (WEIGHTED RANDOM SAMPLING) ====
+    result = []
+    for probs in avg_probs:
+        # Menormalkan probabilitas untuk memastikan jumlahnya 1
+        sum_probs = np.sum(probs)
+        if sum_probs == 0: # Jika semua probabilitas nol, gunakan distribusi seragam
+            normalized_probs = np.full(10, 0.1)
+        else:
+            normalized_probs = probs / sum_probs
+            
+        # Mengambil sampel acak tanpa pengembalian, berdasarkan probabilitas
+        sample = np.random.choice(np.arange(10), size=top_n, replace=False, p=normalized_probs)
+        result.append(sample)
     
     return result, avg_probs
 
@@ -75,7 +87,17 @@ def predict_markov_order2(df, top_n=6):
     sum_satuan = trans_satuan.sum(axis=2, keepdims=True)
     avg_probs[3] = (trans_satuan / (sum_satuan + 1e-6)).mean(axis=(0, 1))
 
-    result = [np.argsort(probs)[-top_n:][::-1] for probs in avg_probs]
+    # ==== PERUBAHAN LOGIKA PREDIKSI: DARI URUTAN BIASA MENJADI ACAK BERBOBOT (WEIGHTED RANDOM SAMPLING) ====
+    result = []
+    for probs in avg_probs:
+        sum_probs = np.sum(probs)
+        if sum_probs == 0:
+            normalized_probs = np.full(10, 0.1)
+        else:
+            normalized_probs = probs / sum_probs
+        sample = np.random.choice(np.arange(10), size=top_n, replace=False, p=normalized_probs)
+        result.append(sample)
+        
     return result
 
 
@@ -88,6 +110,7 @@ def predict_markov_hybrid(df, top_n=6):
         return None
 
     _, probs_o1 = predict_markov(df, top_n=10)
+    if probs_o1 is None: return None
     
     freq_ribuan = np.zeros(10)
     trans_ratusan = np.zeros((10, 10))
@@ -107,5 +130,15 @@ def predict_markov_hybrid(df, top_n=6):
 
     hybrid_probs = (probs_o1 + probs_o2) / 2.0
     
-    result = [np.argsort(probs)[-top_n:][::-1] for probs in hybrid_probs]
+    # ==== PERUBAHAN LOGIKA PREDIKSI: DARI URUTAN BIASA MENJADI ACAK BERBOBOT (WEIGHTED RANDOM SAMPLING) ====
+    result = []
+    for probs in hybrid_probs:
+        sum_probs = np.sum(probs)
+        if sum_probs == 0:
+            normalized_probs = np.full(10, 0.1)
+        else:
+            normalized_probs = probs / sum_probs
+        sample = np.random.choice(np.arange(10), size=top_n, replace=False, p=normalized_probs)
+        result.append(sample)
+        
     return result
