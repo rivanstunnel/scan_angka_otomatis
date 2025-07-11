@@ -81,10 +81,6 @@ with st.sidebar:
 
     st.divider()
     putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", 1, 1000, 100, on_change=reset_prediction_only)
-    
-    # ==== DIHAPUS: Input "Data Uji Akurasi" ====
-    # jumlah_uji = st.number_input("📊 Data Uji Akurasi", 1, 200, 10, on_change=reset_prediction_only)
-    
     metode = st.selectbox("🧠 Metode Prediksi", metode_list, on_change=reset_prediction_only)
     top_n = st.number_input("🔢 Jumlah Top Digit Prediksi", 1, 9, 8, on_change=reset_prediction_only)
 
@@ -110,7 +106,8 @@ if data_source == "API":
 df = st.session_state.get('df_data', pd.DataFrame()).tail(putaran)
 
 if not df.empty:
-    with st.expander(f"✅ Menampilkan {len(df)} data terakhir yang digunakan.", expanded=True):
+    # ==== PERBAIKAN: Mengubah expanded=True menjadi expanded=False ====
+    with st.expander(f"✅ Menampilkan {len(df)} data terakhir yang digunakan.", expanded=False):
         st.code("\n".join(df['angka'].tolist()), language="text")
 
 # --- Tombol dan Logika Prediksi ---
@@ -164,5 +161,3 @@ if st.session_state.get('result') is not None:
         with tab2d:
             st.text_area("Hasil 2D (Kepala-Ekor)", text_2d, height=200)
             st.download_button("Unduh 2D.txt", text_2d, file_name="hasil_2d.txt")
-
-    # ==== BAGIAN EVALUASI AKURASI TELAH DIHAPUS ====
