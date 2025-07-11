@@ -41,24 +41,47 @@ metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
 with st.sidebar:
     st.header("⚙️ Pengaturan")
     
-    # ==== FITUR BARU: Pilihan Sumber Data ====
     data_source = st.radio(
-        " sumber Data",
+        "Sumber Data",
         ("API", "Input Manual"),
         horizontal=True,
     )
     
-    # Kontrol yang muncul berdasarkan pilihan sumber data
     if data_source == "API":
         hari_list = ["harian", "kemarin", "2hari", "3hari", "4hari", "5hari"]
         selected_lokasi = st.selectbox("🌍 Pilih Pasaran", lokasi_list)
         selected_hari = st.selectbox("📅 Pilih Hari", hari_list)
+        
+        # Logika untuk mengambil data API dipindahkan ke sini
+        query_id = f"{selected_lokasi}-{selected_hari}"
+        if 'df_data' not in st.session_state or st.session_state.get('last_query') != query_id:
+            with st.spinner(f"🔄 Mengambil data untuk pasaran {selected_lokasi}..."):
+                try:
+                    url = f"https://wysiwygscan.com/api?pasaran={selected_lokasi.lower()}&hari={selected_hari}&putaran=1000&format=json&urut=asc"
+                    headers = {"Authorization": "Bearer 6705327a2c9a9135f2c8fbad19f09b46"}
+                    response = requests.get(url, headers=headers, timeout=20)
+                    response.raise_for_status()
+                    data = response.json()
+                    all_angka = [item["result"] for item in data.get("data", []) if len(item["result"]) == 4 and item["result"].isdigit()]
+                    st.session_state.df_data = pd.DataFrame({"angka": all_angka})
+                    st.session_state.last_query = query_id
+                    st.success(f"✅ {len(st.session_state.df_data)} data API dimuat.")
+                except Exception as e:
+                    st.error(f"❌ Gagal ambil data API: {e}")
+                    st.session_state.df_data = pd.DataFrame({"angka": []})
+
     else: # data_source == "Input Manual"
         manual_data_input = st.text_area(
             "📋 Masukkan Data Keluaran",
             height=150,
             placeholder="Contoh: 1234 5678, 9012\nPisahkan angka dengan spasi, koma, atau baris baru."
         )
+        # ==== PERBAIKAN 1: Tombol untuk memproses data manual secara eksplisit ====
+        if st.button("Proses Data Manual"):
+            angka_list = re.findall(r'\b\d{4}\b', manual_data_input)
+            st.session_state.df_data = pd.DataFrame({"angka": angka_list})
+            st.session_state.last_query = "manual"
+            st.success(f"✅ {len(angka_list)} data manual berhasil diproses.")
 
     st.divider()
     putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", min_value=1, max_value=1000, value=100)
@@ -66,48 +89,13 @@ with st.sidebar:
     metode = st.selectbox("🧠 Metode Prediksi", metode_list)
     top_n = st.number_input("🔢 Jumlah Top Digit Prediksi", min_value=1, max_value=9, value=6)
 
-# --- Logika Pengambilan dan Pemrosesan Data ---
-# Dijalankan berdasarkan pilihan di sidebar
-
-# 1. Logika untuk Sumber Data API
-if data_source == "API":
-    query_id = f"{selected_lokasi}-{selected_hari}"
-    if 'df_data' not in st.session_state or st.session_state.get('last_query') != query_id:
-        with st.spinner(f"🔄 Mengambil data untuk pasaran {selected_lokasi}..."):
-            try:
-                url = f"https://wysiwygscan.com/api?pasaran={selected_lokasi.lower()}&hari={selected_hari}&putaran=1000&format=json&urut=asc"
-                headers = {"Authorization": "Bearer 6705327a2c9a9135f2c8fbad19f09b46"}
-                response = requests.get(url, headers=headers, timeout=20)
-                response.raise_for_status()
-                data = response.json()
-                all_angka = [item["result"] for item in data.get("data", []) if len(item["result"]) == 4 and item["result"].isdigit()]
-                st.session_state.df_data = pd.DataFrame({"angka": all_angka})
-                st.session_state.last_query = query_id
-                st.success(f"✅ Total {len(st.session_state.df_data)} data berhasil diambil dari API.")
-            except Exception as e:
-                st.error(f"❌ Gagal ambil data API: {e}")
-                st.session_state.df_data = pd.DataFrame({"angka": []})
-
-# 2. Logika untuk Sumber Data Manual
-elif data_source == "Manual":
-    # Hanya proses ulang jika teks di dalam box berubah
-    if st.session_state.get('last_manual_input') != manual_data_input:
-        # Menggunakan regex untuk menemukan semua angka 4 digit
-        angka_list = re.findall(r'\b\d{4}\b', manual_data_input)
-        
-        # Simpan ke session state
-        st.session_state.df_data = pd.DataFrame({"angka": angka_list})
-        st.session_state.last_manual_input = manual_data_input
-        st.session_state.last_query = "manual" # Tandai bahwa sumbernya manual
-        if angka_list:
-            st.success(f"✅ Total {len(angka_list)} data berhasil diproses dari input manual.")
 
 # Mengambil data dari session state untuk digunakan di seluruh aplikasi
 df = st.session_state.get('df_data', pd.DataFrame()).tail(putaran)
 
-# Tampilkan data yang digunakan jika ada
+# Expander kini akan merespon dengan benar setelah data diproses
 if not df.empty:
-    with st.expander(f"✅ Menampilkan {len(df)} data terakhir yang digunakan."):
+    with st.expander(f"✅ Menampilkan {len(df)} data terakhir yang digunakan.", expanded=True):
         st.code("\n".join(df['angka'].tolist()), language="text")
 
 # --- Tombol Prediksi Utama ---
@@ -126,14 +114,14 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
         else:
             st.subheader(f"🎯 Hasil Prediksi Top {top_n} Digit")
             labels = ["As", "Kop", "Kepala", "Ekor"]
-            cols = st.columns(4)
+            
+            # ==== PERBAIKAN 2: Menampilkan hasil per baris ====
             for i, label in enumerate(labels):
-                with cols[i]:
-                    st.metric(label, ", ".join(map(str, result[i])))
+                hasil_str = ", ".join(map(str, result[i]))
+                st.markdown(f"#### **{label}:** `{hasil_str}`")
 
             st.divider()
             with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
-                # (Sisa kode untuk kombinasi dan evaluasi tidak berubah)
                 kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
                 kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
                 kombinasi_2d_list = ["".join(map(str, p)) for p in product(*result[2:])]
@@ -186,3 +174,5 @@ if st.button("🔮 Prediksi Sekarang!", use_container_width=True):
                     st.success(f"**📈 Akurasi Rata-rata (Top-{top_n})**: `{benar_eval / total_eval * 100:.2f}%`")
                 else:
                     st.warning("⚠️ Tidak cukup data untuk melakukan evaluasi akurasi.")
+
+# (Sisa kode untuk pencarian putaran terbaik tidak diubah)
