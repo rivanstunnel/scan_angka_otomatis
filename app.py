@@ -6,12 +6,13 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-from markov_model import top6_markov, top6_markov_order2, top6_markov_hybrid
+# Mengimpor nama fungsi yang benar dari file model
+from markov_model import predict_markov, predict_markov_order2, predict_markov_hybrid
 from ai_model import (
-    top6_lstm,
+    top_n_lstm,
     train_and_save_lstm,
     kombinasi_4d,
-    top6_ensemble,
+    top_n_ensemble,
     model_exists
 )
 from lokasi_list import lokasi_list
@@ -98,16 +99,17 @@ if st.button("🔮 Prediksi"):
     else:
         with st.spinner("⏳ Melakukan prediksi..."):
             result = None
+            # Menggunakan nama fungsi yang benar untuk melakukan prediksi
             if metode == "Markov":
-                result, _ = top6_markov(df)
+                result, _ = predict_markov(df, top_n=6)
             elif metode == "Markov Order-2":
-                result = top6_markov_order2(df)
+                result = predict_markov_order2(df, top_n=6)
             elif metode == "Markov Gabungan":
-                result = top6_markov_hybrid(df)
+                result = predict_markov_hybrid(df, top_n=6)
             elif metode == "LSTM AI":
-                result = top6_lstm(df, lokasi=selected_lokasi)
+                result = top_n_lstm(df, lokasi=selected_lokasi, top_n=6)
             elif metode == "Ensemble AI + Markov":
-                result = top6_ensemble(df, lokasi=selected_lokasi)
+                result = top_n_ensemble(df, lokasi=selected_lokasi, top_n=6)
 
         if result is None:
             st.error("❌ Gagal melakukan prediksi.")
