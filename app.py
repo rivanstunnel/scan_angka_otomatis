@@ -20,11 +20,13 @@ st.set_page_config(page_title="Prediksi 4D Markov", layout="wide")
 
 # Fungsi untuk mereset status
 def reset_data_and_prediction():
+    """Hapus data dan hasil prediksi untuk memulai dari awal."""
     st.session_state.df_data = pd.DataFrame()
     st.session_state.result = None
     st.session_state.last_query = ""
 
 def reset_prediction_only():
+    """Hanya hapus hasil prediksi jika pengaturan analisis berubah."""
     st.session_state.result = None
 
 # Inisialisasi session_state
@@ -79,7 +81,10 @@ with st.sidebar:
 
     st.divider()
     putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", 1, 1000, 100, on_change=reset_prediction_only)
-    jumlah_uji = st.number_input("📊 Data Uji Akurasi", 1, 200, 10, on_change=reset_prediction_only)
+    
+    # ==== DIHAPUS: Input "Data Uji Akurasi" ====
+    # jumlah_uji = st.number_input("📊 Data Uji Akurasi", 1, 200, 10, on_change=reset_prediction_only)
+    
     metode = st.selectbox("🧠 Metode Prediksi", metode_list, on_change=reset_prediction_only)
     top_n = st.number_input("🔢 Jumlah Top Digit Prediksi", 1, 9, 8, on_change=reset_prediction_only)
 
@@ -136,7 +141,6 @@ if st.session_state.get('result') is not None:
     
     st.divider()
 
-    # ==== BAGIAN YANG DIKEMBALIKAN: Kombinasi 4D, 3D, 2D ====
     with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
         kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
         kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
@@ -161,32 +165,4 @@ if st.session_state.get('result') is not None:
             st.text_area("Hasil 2D (Kepala-Ekor)", text_2d, height=200)
             st.download_button("Unduh 2D.txt", text_2d, file_name="hasil_2d.txt")
 
-    # ==== BAGIAN YANG DIKEMBALIKAN: Evaluasi Akurasi ====
-    st.subheader("🔍 Evaluasi Akurasi Model")
-    with st.spinner("📏 Menghitung akurasi..."):
-        uji_df = df.tail(min(jumlah_uji, len(df)))
-        total_eval, benar_eval = 0, 0
-        
-        if len(uji_df) > 0:
-            for i in range(len(uji_df)):
-                subset_df = df.iloc[:-(len(uji_df) - i)]
-                if len(subset_df) < 11: continue
-                try:
-                    pred_eval = None
-                    if metode == "Markov": pred_eval, _ = predict_markov(subset_df, top_n=top_n)
-                    elif metode == "Markov Order-2": pred_eval = predict_markov_order2(subset_df, top_n=top_n)
-                    elif metode == "Markov Gabungan": pred_eval = predict_markov_hybrid(subset_df, top_n=top_n)
-
-                    if pred_eval is None: continue
-                    actual_eval = f"{int(uji_df.iloc[i]['angka']):04d}"
-                    
-                    for k in range(4):
-                        if int(actual_eval[k]) in pred_eval[k]:
-                            benar_eval += 1
-                    total_eval += 4
-                except Exception: continue
-
-        if total_eval > 0:
-            st.success(f"**📈 Akurasi Rata-rata (Top-{top_n})**: `{benar_eval / total_eval * 100:.2f}%`")
-        else:
-            st.warning("⚠️ Tidak cukup data untuk melakukan evaluasi akurasi.")
+    # ==== BAGIAN EVALUASI AKURASI TELAH DIHAPUS ====
