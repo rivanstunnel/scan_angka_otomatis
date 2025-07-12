@@ -85,16 +85,16 @@ metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
 # --- Sidebar ---
 with st.sidebar:
     st.header("⚙️ Pengaturan")
-    
+
     data_source = st.radio(
         "Sumber Data", ("API", "Input Manual"), horizontal=True, key='data_source_selector'
     )
-    
+
     if data_source == "API":
         hari_list = ["harian", "kemarin", "2hari", "3hari", "4hari", "5hari"]
         selected_lokasi = st.selectbox("🌍 Pilih Pasaran", lokasi_list)
         selected_hari = st.selectbox("📅 Pilih Hari", hari_list)
-        
+
         if st.button("Muat Data API"):
             with st.spinner(f"🔄 Mengambil data untuk {selected_lokasi}..."):
                 try:
@@ -118,13 +118,13 @@ with st.sidebar:
             angka_list = re.findall(r'\b\d{4}\b', manual_data_input)
             st.session_state.df_data = pd.DataFrame({"angka": angka_list})
             st.session_state.prediction_data = None
-            
+
     st.divider()
 
     putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", 1, 1000, 100)
     metode = st.selectbox("🧠 Metode Analisis", metode_list)
     top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 8)
-    
+
     st.divider()
 
     st.header("🔬 Analisis Lanjutan")
@@ -160,7 +160,7 @@ if st.button("📈 Analisis Sekarang!", use_container_width=True):
             if metode == "Markov": result, probs = predict_markov(df, top_n=top_n)
             elif metode == "Markov Order-2": result, probs = predict_markov_order2(df, top_n=top_n)
             elif metode == "Markov Gabungan": result, probs = predict_markov_hybrid(df, top_n=top_n)
-            
+
             if result is not None:
                 st.session_state.prediction_data = {"result": result, "probs": probs}
 
@@ -168,15 +168,15 @@ if st.session_state.get('prediction_data') is not None:
     prediction_data = st.session_state.prediction_data
     result = prediction_data["result"]
     probs = prediction_data["probs"]
-    
+
     st.subheader(f"🎯 Hasil Analisis Top {top_n} Digit")
     labels = ["As", "Kop", "Kepala", "Ekor"]
     for i, label in enumerate(labels):
         hasil_str = ", ".join(map(str, result[i]))
         st.markdown(f"#### **{label}:** `{hasil_str}`")
-    
+
     st.divider()
-    
+
     angka_kontrol_dict = calculate_angka_kontrol(probs, n=6)
     if angka_kontrol_dict:
         st.subheader("🕵️ Angka Kontrol")
@@ -190,7 +190,7 @@ if st.session_state.get('prediction_data') is not None:
         if bbfs_digits:
             bbfs_str = " ".join(map(str, bbfs_digits))
             st.markdown(f"##### **BBFS 5 Digit (2D):** `{bbfs_str}`")
-        
+
         try:
             angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_digits, n_lines=10)
             angka_jadi_2d_str = " * ".join(angka_jadi_2d_list) if angka_jadi_2d_list else "-"
@@ -222,7 +222,7 @@ if st.session_state.get('prediction_data') is not None:
         text_3d = separator.join(kombinasi_3d_list)
         text_2d = separator.join(kombinasi_2d_list)
         tab2d, tab3d, tab4d = st.tabs([f"Kombinasi 2D ({len(kombinasi_2d_list)})", f"Kombinasi 3D ({len(kombinasi_3d_list)})", f"Kombinasi 4D ({len(kombinasi_4d_list)})"])
-        
+
         with tab2d:
             st.text_area("Hasil 2D (Kepala-Ekor)", text_2d, height=200)
             st.download_button("Unduh 2D.txt", text_2d, file_name="hasil_2d.txt")
@@ -240,17 +240,18 @@ if st.session_state.get('run_putaran_analysis', False):
         full_df = st.session_state.get('df_data', pd.DataFrame())
         putaran_results = {}
         max_putaran_test = len(full_df) - jumlah_uji
-        
+
         # --- Rentang Pengujian Diubah Sesuai Permintaan ---
         start_putaran = 11
-        end_putaran = min(100, max_putaran_test)
-        step_putaran = 5 # Step 5 agar tidak terlalu lama (11, 16, 21, ...)
+        end_putaran = min(1000, max_putaran_test)
+        # Step disesuaikan menjadi 25 agar tidak terlalu lama untuk rentang yang lebar
+        step_putaran = 25 
 
         if end_putaran < start_putaran:
-            st.warning(f"Data tidak cukup untuk pengujian rentang 11-100. Butuh data untuk menguji setidaknya {start_putaran} putaran.")
+            st.warning(f"Data tidak cukup untuk pengujian rentang 11-1000. Butuh data untuk menguji setidaknya {start_putaran} putaran.")
         else:
             test_range = list(range(start_putaran, end_putaran + 1, step_putaran))
-            # Pastikan putaran terakhir juga diuji
+            # Pastikan putaran terakhir (maksimum) juga diuji
             if end_putaran not in test_range:
                 test_range.append(end_putaran)
 
@@ -265,7 +266,7 @@ if st.session_state.get('run_putaran_analysis', False):
                     train_df_for_step = full_df.iloc[start_index:end_index]
                     actual_row = full_df.iloc[end_index]
                     if len(train_df_for_step) < 11: continue
-                    
+
                     pred, _ = None, None
                     if metode == "Markov": pred, _ = predict_markov(train_df_for_step, top_n=top_n)
                     elif metode == "Markov Order-2": pred, _ = predict_markov_order2(train_df_for_step, top_n=top_n)
@@ -277,12 +278,12 @@ if st.session_state.get('run_putaran_analysis', False):
                             if int(actual_digits[k]) in pred[k]:
                                 total_benar_for_p += 1
                         total_digits_for_p += 4
-                
+
                 accuracy = (total_benar_for_p / total_digits_for_p * 100) if total_digits_for_p > 0 else 0
                 if accuracy > 0:
                     putaran_results[p] = accuracy
                 progress_bar.progress((i + 1) / len(test_range), text=f"Menganalisis {p} putaran...")
-            
+
             progress_bar.empty()
 
             if not putaran_results:
@@ -290,23 +291,23 @@ if st.session_state.get('run_putaran_analysis', False):
             else:
                 best_putaran = max(putaran_results, key=putaran_results.get)
                 best_accuracy = putaran_results[best_putaran]
-                
+
                 st.subheader("🏆 Rekomendasi Penggunaan Data")
                 m1, m2 = st.columns(2)
                 m1.metric("Putaran Terbaik", f"{best_putaran} Data", "Jumlah data historis")
                 m2.metric("Akurasi Tertinggi", f"{best_accuracy:.2f}%", f"Dengan {best_putaran} data")
-                
+
                 chart_data = pd.DataFrame.from_dict(putaran_results, orient='index', columns=['Akurasi (%)'])
                 chart_data.index.name = 'Jumlah Putaran'
                 st.line_chart(chart_data)
 
                 # --- BAGIAN BARU: MENAMPILKAN TABEL HASIL ---
-                st.subheader("📜 Tabel Hasil Analisis Putaran")
+                st.subheader(f"📜 Tabel Hasil Analisis Putaran (Rentang {start_putaran}-{end_putaran})")
                 # Urutkan tabel berdasarkan akurasi, dari tertinggi ke terendah
                 sorted_chart_data = chart_data.sort_values(by='Akurasi (%)', ascending=False)
                 # Format kolom akurasi agar lebih mudah dibaca
                 sorted_chart_data['Akurasi (%)'] = sorted_chart_data['Akurasi (%)'].map('{:.2f}%'.format)
                 st.dataframe(sorted_chart_data, use_container_width=True)
                 # --- AKHIR BAGIAN BARU ---
-    
+
     st.session_state.run_putaran_analysis = False
