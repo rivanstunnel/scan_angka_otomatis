@@ -184,7 +184,7 @@ if st.session_state.get('prediction_data') is not None:
             st.markdown(f"#### **{label}:** `{numbers_str}`")
         st.divider()
 
-        # --- BAGIAN REKOMENDASI PERMAINAN (FORMAT DIUBAH) ---
+        # --- BAGIAN REKOMENDASI PERMAINAN (KODE DIPERBAIKI) ---
         st.subheader("💣 Rekomendasi Pola Permainan")
 
         # 1. BBFS 5 Digit (dari Top 2D)
@@ -194,24 +194,26 @@ if st.session_state.get('prediction_data') is not None:
             st.markdown(f"##### **BBFS 5 Digit (2D):** `{bbfs_str}`")
         
         # 2. Angka Jadi 2D (10 Line)
-        angka_jadi_2d = generate_angka_jadi_2d(probs, bbfs_digits, n_lines=10)
-        if angka_jadi_2d:
-            st.text_area(
-                "Angka Jadi 2D (10 Line)",
-                " * ".join(angka_jadi_2d), # Pemisah diubah menjadi bintang
-                height=40,
-                help="10 set 2D terbaik berdasarkan BBFS, dipisahkan oleh bintang."
-            )
+        angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_digits, n_lines=10)
+        # Pastikan output selalu string, bahkan jika list kosong, untuk mencegah error
+        angka_jadi_2d_str = " * ".join(angka_jadi_2d_list) if angka_jadi_2d_list else "-"
+        st.text_area(
+            "Angka Jadi 2D (10 Line)",
+            value=angka_jadi_2d_str, # Menggunakan 'value=' untuk kejelasan
+            height=40,
+            help="10 set 2D terbaik berdasarkan BBFS, dipisahkan oleh bintang."
+        )
         
         # 3. Bom 4D (10 Line)
-        bom_4d_lines = generate_bom_4d(probs, result, n_lines=10)
-        if bom_4d_lines:
-            st.text_area(
-                "Bom 4D (10 Line)",
-                " * ".join(bom_4d_lines), # Pemisah diubah menjadi bintang
-                height=40,
-                help="10 set 4D terbaik berdasarkan probabilitas, dipisahkan oleh bintang."
-            )
+        bom_4d_lines_list = generate_bom_4d(probs, result, n_lines=10)
+        # Pastikan output selalu string, bahkan jika list kosong, untuk mencegah error
+        bom_4d_lines_str = " * ".join(bom_4d_lines_list) if bom_4d_lines_list else "-"
+        st.text_area(
+            "Bom 4D (10 Line)",
+            value=bom_4d_lines_str, # Menggunakan 'value=' untuk kejelasan
+            height=40,
+            help="10 set 4D terbaik berdasarkan probabilitas, dipisahkan oleh bintang."
+        )
 
         st.divider()
         # --- AKHIR BAGIAN REKOMENDASI ---
