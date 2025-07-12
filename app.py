@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 import numpy as np
 import re
-from itertools import product, combinations
+from itertools import product, combinations, permutations
 
 # Impor fungsi-fungsi dari file model.
 from markov_model import (
@@ -35,29 +35,44 @@ def calculate_angka_kontrol(probabilities, n=6):
     """
     if probabilities is None or probabilities.shape != (4, 10):
         return {}
-
-    # Kalkulasi dasar: total probabilitas di semua posisi
     total_probs = np.sum(probabilities, axis=0)
-
-    # Baris 1: Angka Kontrol Global (Top N terkuat)
     ak_global = np.argsort(total_probs)[-n:][::-1].tolist()
-
-    # Baris 2: Top N untuk 2D (Kepala + Ekor)
     probs_2d = np.sum(probabilities[2:], axis=0)
     top_2d = np.argsort(probs_2d)[-n:][::-1].tolist()
-
-    # Baris 3: Angka Terkuat di Setiap Posisi (AS, KOP, KEP, EKO)
     kuat_posisi = np.argmax(probabilities, axis=1).tolist()
-
-    # Baris 4: Angka Lemah Global (Top N terlemah untuk dihindari)
     lemah_global = np.argsort(total_probs)[:n].tolist()
-
     return {
         "Angka Kontrol (AK)": ak_global,
         "Top 2D (KEP-EKO)": top_2d,
         "Jagoan Posisi (AS-KOP-KEP-EKO)": kuat_posisi,
         "Angka Lemah (Hindari)": lemah_global,
     }
+
+def generate_angka_jadi_2d(probabilities, bbfs_digits, n_lines=10):
+    """Menghasilkan 10 line Angka Jadi 2D dari digit BBFS."""
+    if probabilities is None or not bbfs_digits:
+        return []
+    all_2d_lines = list(permutations(bbfs_digits, 2))
+    scored_lines = []
+    for line in all_2d_lines:
+        kepala, ekor = line
+        score = probabilities[2][kepala] + probabilities[3][ekor]
+        scored_lines.append(("".join(map(str, line)), score))
+    sorted_lines = sorted(scored_lines, key=lambda x: x[1], reverse=True)
+    return [line[0] for line in sorted_lines[:n_lines]]
+
+def generate_bom_4d(probabilities, result_digits, n_lines=10):
+    """Menghasilkan 10 line Bom 4D dari hasil analisis."""
+    if probabilities is None or not result_digits or len(result_digits) != 4:
+        return []
+    all_4d_lines = list(product(*result_digits))
+    scored_lines = []
+    for line in all_4d_lines:
+        a, k, p, e = line
+        score = probabilities[0][a] + probabilities[1][k] + probabilities[2][p] + probabilities[3][e]
+        scored_lines.append(("".join(map(str, line)), score))
+    sorted_lines = sorted(scored_lines, key=lambda x: x[1], reverse=True)
+    return [line[0] for line in sorted_lines[:n_lines]]
 
 # ==============================================================================
 # --- UI (Tampilan Aplikasi) Dimulai di Sini ---
@@ -169,23 +184,42 @@ if st.session_state.get('prediction_data') is not None:
             st.markdown(f"#### **{label}:** `{numbers_str}`")
         st.divider()
 
-        # --- BAGIAN TAMBAHAN UNTUK BBFS & BOM ---
+        # --- BAGIAN REKOMENDASI PERMAINAN (DIUBAH TOTAL) ---
         st.subheader("💣 Rekomendasi Pola Permainan")
 
-        # 1. Menampilkan BBFS 5 Digit (diambil dari 5 angka terkuat di AK)
-        bbfs_digits = angka_kontrol_dict.get("Angka Kontrol (AK)", [])[:5]
-        if bbfs_digits:
-            bbfs_str = " ".join(map(str, bbfs_digits))
-            st.markdown(f"#### **BBFS 5 Digit:** `{bbfs_str}`")
+        col1, col2 = st.columns(2)
 
-        # 2. Menampilkan Angka Bom 4D (diambil dari Jagoan Posisi)
-        bom_digits = angka_kontrol_dict.get("Jagoan Posisi (AS-KOP-KEP-EKO)", [])
-        if len(bom_digits) == 4:
-            bom_str = "".join(map(str, bom_digits))
-            st.markdown(f"#### **Angka Bom 4D:** `{bom_str}`")
+        with col1:
+            # 1. BBFS 5 Digit (dari Top 2D)
+            bbfs_digits = angka_kontrol_dict.get("Top 2D (KEP-EKO)", [])[:5]
+            if bbfs_digits:
+                bbfs_str = " ".join(map(str, bbfs_digits))
+                st.markdown(f"##### **BBFS 5 Digit (2D):** `{bbfs_str}`")
+                
+                # 2. Angka Jadi 2D (10 Line)
+                angka_jadi_2d = generate_angka_jadi_2d(probs, bbfs_digits, n_lines=10)
+                if angka_jadi_2d:
+                    st.text_area(
+                        "Angka Jadi 2D (10 Line)",
+                        " ".join(angka_jadi_2d),
+                        height=100,
+                        help="10 set 2D terbaik berdasarkan BBFS."
+                    )
         
+        with col2:
+             # 3. Bom 4D (10 Line)
+            bom_4d_lines = generate_bom_4d(probs, result, n_lines=10)
+            if bom_4d_lines:
+                st.markdown("##### **Bom 4D (10 Line)**")
+                st.text_area(
+                    "Bom 4D (10 Line)",
+                    "\n".join(bom_4d_lines),
+                    height=250,
+                    help="10 set 4D terbaik berdasarkan probabilitas setiap posisi."
+                )
+
         st.divider()
-        # --- AKHIR BAGIAN TAMBAHAN ---
+        # --- AKHIR BAGIAN REKOMENDASI ---
 
     with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
         kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
