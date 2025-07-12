@@ -184,7 +184,7 @@ if st.session_state.get('prediction_data') is not None:
             st.markdown(f"#### **{label}:** `{numbers_str}`")
         st.divider()
 
-        # --- BAGIAN REKOMENDASI PERMAINAN (KODE DIPERBAIKI) ---
+        # --- BAGIAN REKOMENDASI PERMAINAN (DENGAN PENANGKAL ERROR) ---
         st.subheader("💣 Rekomendasi Pola Permainan")
 
         # 1. BBFS 5 Digit (dari Top 2D)
@@ -193,27 +193,33 @@ if st.session_state.get('prediction_data') is not None:
             bbfs_str = " ".join(map(str, bbfs_digits))
             st.markdown(f"##### **BBFS 5 Digit (2D):** `{bbfs_str}`")
         
-        # 2. Angka Jadi 2D (10 Line)
-        angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_digits, n_lines=10)
-        # Pastikan output selalu string, bahkan jika list kosong, untuk mencegah error
-        angka_jadi_2d_str = " * ".join(angka_jadi_2d_list) if angka_jadi_2d_list else "-"
-        st.text_area(
-            "Angka Jadi 2D (10 Line)",
-            value=angka_jadi_2d_str, # Menggunakan 'value=' untuk kejelasan
-            height=40,
-            help="10 set 2D terbaik berdasarkan BBFS, dipisahkan oleh bintang."
-        )
+        # 2. Angka Jadi 2D (10 Line) - Dibungkus try-except
+        try:
+            angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_digits, n_lines=10)
+            angka_jadi_2d_str = " * ".join(angka_jadi_2d_list) if angka_jadi_2d_list else "-"
+            st.text_area(
+                "Angka Jadi 2D (10 Line)",
+                value=angka_jadi_2d_str,
+                height=40,
+                help="10 set 2D terbaik berdasarkan BBFS, dipisahkan oleh bintang."
+            )
+        except Exception as e:
+            st.error(f"Terjadi galat saat membuat Angka Jadi 2D. Silakan periksa kembali data input.")
+            st.exception(e) # Menampilkan detail galat untuk debugging
         
-        # 3. Bom 4D (10 Line)
-        bom_4d_lines_list = generate_bom_4d(probs, result, n_lines=10)
-        # Pastikan output selalu string, bahkan jika list kosong, untuk mencegah error
-        bom_4d_lines_str = " * ".join(bom_4d_lines_list) if bom_4d_lines_list else "-"
-        st.text_area(
-            "Bom 4D (10 Line)",
-            value=bom_4d_lines_str, # Menggunakan 'value=' untuk kejelasan
-            height=40,
-            help="10 set 4D terbaik berdasarkan probabilitas, dipisahkan oleh bintang."
-        )
+        # 3. Bom 4D (10 Line) - Dibungkus try-except
+        try:
+            bom_4d_lines_list = generate_bom_4d(probs, result, n_lines=10)
+            bom_4d_lines_str = " * ".join(bom_4d_lines_list) if bom_4d_lines_list else "-"
+            st.text_area(
+                "Bom 4D (10 Line)",
+                value=bom_4d_lines_str,
+                height=40,
+                help="10 set 4D terbaik berdasarkan probabilitas, dipisahkan oleh bintang."
+            )
+        except Exception as e:
+            st.error(f"Terjadi galat saat membuat Bom 4D. Silakan periksa kembali data input.")
+            st.exception(e) # Menampilkan detail galat untuk debugging
 
         st.divider()
         # --- AKHIR BAGIAN REKOMENDASI ---
