@@ -161,8 +161,6 @@ if st.session_state.get('prediction_data') is not None:
     
     st.divider()
     
-    # --- BAGIAN YANG DIUBAH ---
-    # Menghitung dan menampilkan Angka Kontrol
     angka_kontrol_dict = calculate_angka_kontrol(probs, n=6)
     if angka_kontrol_dict:
         st.subheader("🕵️ Angka Kontrol")
@@ -170,7 +168,24 @@ if st.session_state.get('prediction_data') is not None:
             numbers_str = " ".join(map(str, numbers))
             st.markdown(f"#### **{label}:** `{numbers_str}`")
         st.divider()
-    # --- AKHIR BAGIAN YANG DIUBAH ---
+
+        # --- BAGIAN TAMBAHAN UNTUK BBFS & BOM ---
+        st.subheader("💣 Rekomendasi Pola Permainan")
+
+        # 1. Menampilkan BBFS 5 Digit (diambil dari 5 angka terkuat di AK)
+        bbfs_digits = angka_kontrol_dict.get("Angka Kontrol (AK)", [])[:5]
+        if bbfs_digits:
+            bbfs_str = " ".join(map(str, bbfs_digits))
+            st.markdown(f"#### **BBFS 5 Digit:** `{bbfs_str}`")
+
+        # 2. Menampilkan Angka Bom 4D (diambil dari Jagoan Posisi)
+        bom_digits = angka_kontrol_dict.get("Jagoan Posisi (AS-KOP-KEP-EKO)", [])
+        if len(bom_digits) == 4:
+            bom_str = "".join(map(str, bom_digits))
+            st.markdown(f"#### **Angka Bom 4D:** `{bom_str}`")
+        
+        st.divider()
+        # --- AKHIR BAGIAN TAMBAHAN ---
 
     with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
         kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
