@@ -18,7 +18,6 @@ from lokasi_list import lokasi_list
 st.set_page_config(page_title="Analisis Prediksi 4D", layout="wide")
 
 # --- Inisialisasi State Aplikasi ---
-# Fungsi ini memastikan variabel yang kita butuhkan selalu ada di awal
 def init_session_state():
     if 'df_data' not in st.session_state:
         st.session_state.df_data = pd.DataFrame()
@@ -30,22 +29,40 @@ def init_session_state():
 init_session_state()
 
 # --- Fungsi Bantuan ---
-def calculate_colok(probabilities):
-    if probabilities is None:
-        return [], []
+def calculate_angka_kontrol(probabilities, n=6):
+    """
+    Menghitung 4 baris Angka Kontrol yang berbeda berdasarkan matriks probabilitas.
+    """
+    if probabilities is None or probabilities.shape != (4, 10):
+        return {}
+
+    # Kalkulasi dasar: total probabilitas di semua posisi
     total_probs = np.sum(probabilities, axis=0)
-    top_3_cb_digits = np.argsort(total_probs)[-3:][::-1].tolist()
-    all_digit_pairs = list(combinations(range(10), 2))
-    scored_cm_pairs = [{'pair': pair, 'score': total_probs[pair[0]] + total_probs[pair[1]]} for pair in all_digit_pairs]
-    top_3_cm = sorted(scored_cm_pairs, key=lambda x: x['score'], reverse=True)[:3]
-    formatted_cm_pairs = [f"{item['pair'][0]}{item['pair'][1]}" for item in top_3_cm]
-    return top_3_cb_digits, formatted_cm_pairs
+
+    # Baris 1: Angka Kontrol Global (Top N terkuat)
+    ak_global = np.argsort(total_probs)[-n:][::-1].tolist()
+
+    # Baris 2: Top N untuk 2D (Kepala + Ekor)
+    probs_2d = np.sum(probabilities[2:], axis=0)
+    top_2d = np.argsort(probs_2d)[-n:][::-1].tolist()
+
+    # Baris 3: Angka Terkuat di Setiap Posisi (AS, KOP, KEP, EKO)
+    kuat_posisi = np.argmax(probabilities, axis=1).tolist()
+
+    # Baris 4: Angka Lemah Global (Top N terlemah untuk dihindari)
+    lemah_global = np.argsort(total_probs)[:n].tolist()
+
+    return {
+        "Angka Kontrol (AK)": ak_global,
+        "Top 2D (KEP-EKO)": top_2d,
+        "Jagoan Posisi (AS-KOP-KEP-EKO)": kuat_posisi,
+        "Angka Lemah (Hindari)": lemah_global,
+    }
 
 # ==============================================================================
 # --- UI (Tampilan Aplikasi) Dimulai di Sini ---
 # ==============================================================================
 
-# st.image("http://googleusercontent.com/file_content/1", width=200) # Ganti dengan path lokal jika perlu
 st.title("📊 Analisis Prediksi 4D")
 
 metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
@@ -54,7 +71,6 @@ metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
 with st.sidebar:
     st.header("⚙️ Pengaturan")
     
-    # 1. PENGATURAN SUMBER DATA
     data_source = st.radio(
         "Sumber Data", ("API", "Input Manual"), horizontal=True, key='data_source_selector'
     )
@@ -90,14 +106,12 @@ with st.sidebar:
             
     st.divider()
 
-    # 2. PENGATURAN ANALISIS UTAMA
     putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", 1, 1000, 100)
     metode = st.selectbox("🧠 Metode Analisis", metode_list)
     top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 8)
     
     st.divider()
 
-    # 3. PENGATURAN ANALISIS LANJUTAN
     st.header("🔬 Analisis Lanjutan")
     jumlah_uji = st.number_input(
         "📊 Jml Data untuk Back-testing", 1, 200, 10,
@@ -115,15 +129,12 @@ with st.sidebar:
 # --- TAMPILAN UTAMA ---
 # ==============================================================================
 
-# Data Frame yang akan digunakan oleh seluruh aplikasi
 df = st.session_state.get('df_data', pd.DataFrame()).tail(putaran)
 
-# Expander untuk menampilkan data yang sedang digunakan
 if not df.empty:
     with st.expander(f"✅ Menampilkan {len(df)} data terakhir yang digunakan.", expanded=False):
         st.code("\n".join(df['angka'].tolist()), language="text")
 
-# Tombol dan Logika Analisis Utama
 if st.button("📈 Analisis Sekarang!", use_container_width=True):
     if len(df) < 11:
         st.warning("❌ Minimal 11 data diperlukan untuk analisis.")
@@ -137,7 +148,6 @@ if st.button("📈 Analisis Sekarang!", use_container_width=True):
             if result is not None:
                 st.session_state.prediction_data = {"result": result, "probs": probs}
 
-# Tampilkan Hasil Analisis Utama (jika ada)
 if st.session_state.get('prediction_data') is not None:
     prediction_data = st.session_state.prediction_data
     result = prediction_data["result"]
@@ -150,13 +160,17 @@ if st.session_state.get('prediction_data') is not None:
         st.markdown(f"#### **{label}:** `{hasil_str}`")
     
     st.divider()
-    top_cb, top_cm = calculate_colok(probs)
-    if top_cb and top_cm:
-        cb_str = " ".join(map(str, top_cb))
-        cm_str = " ".join(top_cm)
-        st.markdown(f"#### **Colok Bebas / CB:** `{cb_str}`")
-        st.markdown(f"#### **Makau / CM:** `{cm_str}`")
+    
+    # --- BAGIAN YANG DIUBAH ---
+    # Menghitung dan menampilkan Angka Kontrol
+    angka_kontrol_dict = calculate_angka_kontrol(probs, n=6)
+    if angka_kontrol_dict:
+        st.subheader("🕵️ Angka Kontrol")
+        for label, numbers in angka_kontrol_dict.items():
+            numbers_str = " ".join(map(str, numbers))
+            st.markdown(f"#### **{label}:** `{numbers_str}`")
         st.divider()
+    # --- AKHIR BAGIAN YANG DIUBAH ---
 
     with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
         kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
@@ -178,7 +192,6 @@ if st.session_state.get('prediction_data') is not None:
             st.text_area("Hasil 4D (As-Kop-Kepala-Ekor)", text_4d, height=200)
             st.download_button("Unduh 4D.txt", text_4d, file_name="hasil_4d.txt")
 
-# Logika & Tampilan Analisis Putaran Terbaik (jika tombol ditekan)
 if st.session_state.get('run_putaran_analysis', False):
     st.header("🔬 Hasil Analisis Putaran Terbaik")
     with st.spinner("Menganalisis berbagai jumlah putaran..."):
