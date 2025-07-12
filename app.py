@@ -236,7 +236,7 @@ if st.session_state.get('prediction_data') is not None:
 # --- BAGIAN ANALISIS PUTARAN TERBAIK (DIUBAH) ---
 if st.session_state.get('run_putaran_analysis', False):
     st.header("🔬 Hasil Analisis Putaran Terbaik")
-    with st.spinner("Menganalisis berbagai jumlah putaran... Ini mungkin memakan waktu beberapa saat."):
+    with st.spinner("Menganalisis berbagai jumlah putaran... Ini akan memakan waktu SANGAT LAMA."):
         full_df = st.session_state.get('df_data', pd.DataFrame())
         putaran_results = {}
         max_putaran_test = len(full_df) - jumlah_uji
@@ -244,17 +244,14 @@ if st.session_state.get('run_putaran_analysis', False):
         # --- Rentang Pengujian Diubah Sesuai Permintaan ---
         start_putaran = 11
         end_putaran = min(1000, max_putaran_test)
-        # Step disesuaikan menjadi 25 agar tidak terlalu lama untuk rentang yang lebar
-        step_putaran = 25 
+        # Step diubah menjadi 1 untuk analisis mendetail sesuai permintaan.
+        step_putaran = 1
 
         if end_putaran < start_putaran:
-            st.warning(f"Data tidak cukup untuk pengujian rentang 11-1000. Butuh data untuk menguji setidaknya {start_putaran} putaran.")
+            st.warning(f"Data tidak cukup untuk pengujian. Butuh data untuk menguji setidaknya {start_putaran} putaran.")
         else:
             test_range = list(range(start_putaran, end_putaran + 1, step_putaran))
-            # Pastikan putaran terakhir (maksimum) juga diuji
-            if end_putaran not in test_range:
-                test_range.append(end_putaran)
-
+            
             progress_bar = st.progress(0, text="Memulai analisis...")
             for i, p in enumerate(test_range):
                 total_benar_for_p = 0
@@ -282,7 +279,10 @@ if st.session_state.get('run_putaran_analysis', False):
                 accuracy = (total_benar_for_p / total_digits_for_p * 100) if total_digits_for_p > 0 else 0
                 if accuracy > 0:
                     putaran_results[p] = accuracy
-                progress_bar.progress((i + 1) / len(test_range), text=f"Menganalisis {p} putaran...")
+                
+                # Update progress bar
+                progress_text = f"Menganalisis {p} putaran... ({i+1}/{len(test_range)})"
+                progress_bar.progress((i + 1) / len(test_range), text=progress_text)
 
             progress_bar.empty()
 
@@ -301,13 +301,11 @@ if st.session_state.get('run_putaran_analysis', False):
                 chart_data.index.name = 'Jumlah Putaran'
                 st.line_chart(chart_data)
 
-                # --- BAGIAN BARU: MENAMPILKAN TABEL HASIL ---
                 st.subheader(f"📜 Tabel Hasil Analisis Putaran (Rentang {start_putaran}-{end_putaran})")
                 # Urutkan tabel berdasarkan akurasi, dari tertinggi ke terendah
                 sorted_chart_data = chart_data.sort_values(by='Akurasi (%)', ascending=False)
                 # Format kolom akurasi agar lebih mudah dibaca
                 sorted_chart_data['Akurasi (%)'] = sorted_chart_data['Akurasi (%)'].map('{:.2f}%'.format)
                 st.dataframe(sorted_chart_data, use_container_width=True)
-                # --- AKHIR BAGIAN BARU ---
 
     st.session_state.run_putaran_analysis = False
