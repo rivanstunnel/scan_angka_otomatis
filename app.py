@@ -134,8 +134,9 @@ with st.sidebar:
     )
     if st.button("🔍 Analisis Putaran Terbaik"):
         total_data_saat_ini = len(st.session_state.get('df_data', []))
-        if total_data_saat_ini < 30:
-            st.warning(f"Butuh minimal 30 data riwayat. Saat ini hanya ada **{total_data_saat_ini}** data yang dimuat.")
+        # Membutuhkan data uji + minimal 11 data untuk dianalisis
+        if total_data_saat_ini < jumlah_uji + 11:
+            st.warning(f"Butuh minimal {jumlah_uji + 11} data riwayat untuk pengujian ini. Saat ini hanya ada **{total_data_saat_ini}** data.")
         else:
             st.session_state.run_putaran_analysis = True
             st.session_state.prediction_data = None
@@ -184,43 +185,33 @@ if st.session_state.get('prediction_data') is not None:
             st.markdown(f"#### **{label}:** `{numbers_str}`")
         st.divider()
 
-        # --- BAGIAN REKOMENDASI PERMAINAN (PERBAIKAN FINAL) ---
         st.subheader("💣 Rekomendasi Pola Permainan")
-
-        # 1. BBFS 5 Digit (dari Top 2D)
         bbfs_digits = angka_kontrol_dict.get("Top 2D (KEP-EKO)", [])[:5]
         if bbfs_digits:
             bbfs_str = " ".join(map(str, bbfs_digits))
             st.markdown(f"##### **BBFS 5 Digit (2D):** `{bbfs_str}`")
         
-        # 2. Angka Jadi 2D (10 Line)
         try:
             angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_digits, n_lines=10)
             angka_jadi_2d_str = " * ".join(angka_jadi_2d_list) if angka_jadi_2d_list else "-"
             st.text_area(
-                "Angka Jadi 2D (10 Line)",
-                value=angka_jadi_2d_str,
-                # Parameter height dihapus untuk menggunakan default yang valid
+                "Angka Jadi 2D (10 Line)", value=angka_jadi_2d_str,
                 help="10 set 2D terbaik berdasarkan BBFS, dipisahkan oleh bintang."
             )
         except Exception as e:
             st.error(f"Terjadi galat saat membuat Angka Jadi 2D: {e}")
 
-        # 3. Bom 4D (10 Line)
         try:
             bom_4d_lines_list = generate_bom_4d(probs, result, n_lines=10)
             bom_4d_lines_str = " * ".join(bom_4d_lines_list) if bom_4d_lines_list else "-"
             st.text_area(
-                "Bom 4D (10 Line)",
-                value=bom_4d_lines_str,
-                # Parameter height dihapus untuk menggunakan default yang valid
+                "Bom 4D (10 Line)", value=bom_4d_lines_str,
                 help="10 set 4D terbaik berdasarkan probabilitas, dipisahkan oleh bintang."
             )
         except Exception as e:
             st.error(f"Terjadi galat saat membuat Bom 4D: {e}")
 
         st.divider()
-        # --- AKHIR BAGIAN REKOMENDASI ---
 
     with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
         kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
@@ -242,19 +233,26 @@ if st.session_state.get('prediction_data') is not None:
             st.text_area("Hasil 4D (As-Kop-Kepala-Ekor)", text_4d, height=200)
             st.download_button("Unduh 4D.txt", text_4d, file_name="hasil_4d.txt")
 
+# --- BAGIAN ANALISIS PUTARAN TERBAIK (DIUBAH) ---
 if st.session_state.get('run_putaran_analysis', False):
     st.header("🔬 Hasil Analisis Putaran Terbaik")
-    with st.spinner("Menganalisis berbagai jumlah putaran..."):
+    with st.spinner("Menganalisis berbagai jumlah putaran... Ini mungkin memakan waktu beberapa saat."):
         full_df = st.session_state.get('df_data', pd.DataFrame())
         putaran_results = {}
         max_putaran_test = len(full_df) - jumlah_uji
         
-        if max_putaran_test < 20:
-             st.warning(f"Data tidak cukup. Butuh total {20 + jumlah_uji} data, hanya ada {len(full_df)}.")
+        # --- Rentang Pengujian Diubah Sesuai Permintaan ---
+        start_putaran = 11
+        end_putaran = min(100, max_putaran_test)
+        step_putaran = 5 # Step 5 agar tidak terlalu lama (11, 16, 21, ...)
+
+        if end_putaran < start_putaran:
+            st.warning(f"Data tidak cukup untuk pengujian rentang 11-100. Butuh data untuk menguji setidaknya {start_putaran} putaran.")
         else:
-            test_range = list(range(20, max_putaran_test + 1, 10))
-            if max_putaran_test not in test_range and max_putaran_test > 20:
-                test_range.append(max_putaran_test)
+            test_range = list(range(start_putaran, end_putaran + 1, step_putaran))
+            # Pastikan putaran terakhir juga diuji
+            if end_putaran not in test_range:
+                test_range.append(end_putaran)
 
             progress_bar = st.progress(0, text="Memulai analisis...")
             for i, p in enumerate(test_range):
@@ -299,7 +297,16 @@ if st.session_state.get('run_putaran_analysis', False):
                 m2.metric("Akurasi Tertinggi", f"{best_accuracy:.2f}%", f"Dengan {best_putaran} data")
                 
                 chart_data = pd.DataFrame.from_dict(putaran_results, orient='index', columns=['Akurasi (%)'])
-                chart_data.index.name = 'Jumlah Putaran Digunakan'
+                chart_data.index.name = 'Jumlah Putaran'
                 st.line_chart(chart_data)
+
+                # --- BAGIAN BARU: MENAMPILKAN TABEL HASIL ---
+                st.subheader("📜 Tabel Hasil Analisis Putaran")
+                # Urutkan tabel berdasarkan akurasi, dari tertinggi ke terendah
+                sorted_chart_data = chart_data.sort_values(by='Akurasi (%)', ascending=False)
+                # Format kolom akurasi agar lebih mudah dibaca
+                sorted_chart_data['Akurasi (%)'] = sorted_chart_data['Akurasi (%)'].map('{:.2f}%'.format)
+                st.dataframe(sorted_chart_data, use_container_width=True)
+                # --- AKHIR BAGIAN BARU ---
     
     st.session_state.run_putaran_analysis = False
