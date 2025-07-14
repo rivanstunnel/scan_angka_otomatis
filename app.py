@@ -45,17 +45,14 @@ def calculate_angka_kontrol(probabilities):
 
     # 3. Jagoan Posisi (AS-KOP-KEP-EKO) -> 7 digit unik
     jagoan_per_posisi = np.argmax(probabilities, axis=1).tolist()
-    # Hapus duplikat sambil mempertahankan urutan
     jagoan_final = list(dict.fromkeys(jagoan_per_posisi))
     
-    # Lengkapi dengan angka terkuat dari AK jika belum cukup 7
     for digit in ak_global:
         if len(jagoan_final) >= 7:
             break
         if digit not in jagoan_final:
             jagoan_final.append(digit)
             
-    # Pengaman jika masih kurang (kasus sangat langka)
     if len(jagoan_final) < 7:
         sisa_digit = [d for d in range(10) if d not in jagoan_final]
         needed = 7 - len(jagoan_final)
@@ -71,28 +68,38 @@ def calculate_angka_kontrol(probabilities):
         "Angka Lemah (Hindari)": lemah_global,
     }
 
-def generate_angka_jadi_2d(probabilities, bbfs_digits, n_lines=10):
+def generate_angka_jadi_2d(probabilities, bbfs_digits):
+    """Menghasilkan semua kombinasi 2D dari digit BBFS dan mengurutkannya."""
     if probabilities is None or not bbfs_digits:
         return []
-    all_2d_lines = list(permutations(bbfs_digits, 2))
+    # Menggunakan product untuk menghasilkan 7x7 = 49 kombinasi
+    all_2d_lines = list(product(bbfs_digits, repeat=2))
     scored_lines = []
     for line in all_2d_lines:
         kepala, ekor = line
+        # Pastikan kepala dan ekor adalah integer
+        kepala, ekor = int(kepala), int(ekor)
         score = probabilities[2][kepala] + probabilities[3][ekor]
         scored_lines.append(("".join(map(str, line)), score))
+    
     sorted_lines = sorted(scored_lines, key=lambda x: x[1], reverse=True)
-    return [line[0] for line in sorted_lines[:n_lines]]
+    return [line[0] for line in sorted_lines]
 
-def generate_bom_4d(probabilities, result_digits, n_lines=10):
-    if probabilities is None or not result_digits or len(result_digits) != 4:
+def generate_bom_4d(probabilities, bbfs_source_digits, n_lines=10):
+    """Menghasilkan Bom 4D dari digit BBFS."""
+    if probabilities is None or not bbfs_source_digits:
         return []
-    all_4d_lines = list(product(*result_digits))
+    # Menggunakan product untuk menghasilkan kombinasi dari sumber BBFS
+    all_4d_lines = list(product(bbfs_source_digits, repeat=4))
     scored_lines = []
     for line in all_4d_lines:
-        a, k, p, e = line
+        # Pastikan semua digit adalah integer
+        a, k, p, e = map(int, line)
         score = probabilities[0][a] + probabilities[1][k] + probabilities[2][p] + probabilities[3][e]
         scored_lines.append(("".join(map(str, line)), score))
+        
     sorted_lines = sorted(scored_lines, key=lambda x: x[1], reverse=True)
+    # Mengembalikan hanya top N line sesuai permintaan
     return [line[0] for line in sorted_lines[:n_lines]]
 
 # ==============================================================================
@@ -199,18 +206,23 @@ if st.session_state.get('prediction_data') is not None:
         st.divider()
 
         st.subheader("💣 Rekomendasi Pola Permainan")
-        bbfs_digits = angka_kontrol_dict.get("Top 2D (KEP-EKO)", [])[:5]
+        # Mengambil 7 digit untuk BBFS
+        bbfs_digits = angka_kontrol_dict.get("Top 2D (KEP-EKO)", [])[:7]
         if bbfs_digits:
             bbfs_str = " ".join(map(str, bbfs_digits))
-            st.markdown(f"##### **BBFS 5 Digit (2D):** `{bbfs_str}`")
+            # Mengubah label menjadi 7 digit
+            st.markdown(f"##### **BBFS 7 Digit (2D):** `{bbfs_str}`")
         try:
-            angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_digits, n_lines=10)
+            # Menghasilkan semua 49 line
+            angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_digits)
             angka_jadi_2d_str = " * ".join(angka_jadi_2d_list) if angka_jadi_2d_list else "-"
-            st.text_area("Angka Jadi 2D (10 Line)", value=angka_jadi_2d_str)
+            # Mengubah label menjadi dinamis
+            st.text_area(f"Angka Jadi 2D ({len(angka_jadi_2d_list)} Line)", value=angka_jadi_2d_str)
         except Exception as e:
             st.error(f"Terjadi galat saat membuat Angka Jadi 2D: {e}")
         try:
-            bom_4d_lines_list = generate_bom_4d(probs, result, n_lines=10)
+            # Menggunakan bbfs_digits sebagai sumber untuk Bom 4D
+            bom_4d_lines_list = generate_bom_4d(probs, bbfs_digits, n_lines=10)
             bom_4d_lines_str = " * ".join(bom_4d_lines_list) if bom_4d_lines_list else "-"
             st.text_area("Bom 4D (10 Line)", value=bom_4d_lines_str)
         except Exception as e:
@@ -237,7 +249,7 @@ if st.session_state.get('prediction_data') is not None:
             st.text_area("Hasil 4D (As-Kop-Kepala-Ekor)", text_4d, height=200)
             st.download_button("Unduh 4D.txt", text_4d, file_name="hasil_4d.txt")
 
-# --- INI ADALAH BAGIAN YANG SEHARUSNYA PALING BAWAH ---
+# --- Bagian Analisis Putaran Terbaik ---
 if st.session_state.get('run_putaran_analysis', False):
     st.header("🔬 Hasil Analisis Putaran Terbaik")
     with st.spinner("Menganalisis berbagai jumlah putaran... Ini akan memakan waktu."):
