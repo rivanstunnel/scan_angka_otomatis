@@ -27,19 +27,47 @@ def init_session_state():
 init_session_state()
 
 # --- Fungsi Bantuan ---
-def calculate_angka_kontrol(probabilities, n=6):
+def calculate_angka_kontrol(probabilities):
+    """
+    Menghitung Angka Kontrol berdasarkan matriks probabilitas sesuai permintaan baru.
+    """
     if probabilities is None or probabilities.shape != (4, 10):
         return {}
+
     total_probs = np.sum(probabilities, axis=0)
-    ak_global = np.argsort(total_probs)[-n:][::-1].tolist()
     probs_2d = np.sum(probabilities[2:], axis=0)
-    top_2d = np.argsort(probs_2d)[-n:][::-1].tolist()
-    kuat_posisi = np.argmax(probabilities, axis=1).tolist()
-    lemah_global = np.argsort(total_probs)[:n].tolist()
+
+    # 1. Angka Kontrol (AK) -> 7 digit
+    ak_global = np.argsort(total_probs)[-7:][::-1].tolist()
+
+    # 2. Top 2D (KEP-EKO) -> 7 digit
+    top_2d = np.argsort(probs_2d)[-7:][::-1].tolist()
+
+    # 3. Jagoan Posisi (AS-KOP-KEP-EKO) -> 7 digit unik
+    jagoan_per_posisi = np.argmax(probabilities, axis=1).tolist()
+    # Hapus duplikat sambil mempertahankan urutan
+    jagoan_final = list(dict.fromkeys(jagoan_per_posisi))
+    
+    # Lengkapi dengan angka terkuat dari AK jika belum cukup 7
+    for digit in ak_global:
+        if len(jagoan_final) >= 7:
+            break
+        if digit not in jagoan_final:
+            jagoan_final.append(digit)
+            
+    # Pengaman jika masih kurang (kasus sangat langka)
+    if len(jagoan_final) < 7:
+        sisa_digit = [d for d in range(10) if d not in jagoan_final]
+        needed = 7 - len(jagoan_final)
+        jagoan_final.extend(sisa_digit[:needed])
+
+    # 4. Angka Lemah (Hindari) -> 2 digit
+    lemah_global = np.argsort(total_probs)[:2].tolist()
+
     return {
         "Angka Kontrol (AK)": ak_global,
         "Top 2D (KEP-EKO)": top_2d,
-        "Jagoan Posisi (AS-KOP-KEP-EKO)": kuat_posisi,
+        "Jagoan Posisi (AS-KOP-KEP-EKO)": jagoan_final,
         "Angka Lemah (Hindari)": lemah_global,
     }
 
@@ -162,7 +190,7 @@ if st.session_state.get('prediction_data') is not None:
         st.markdown(f"#### **{label}:** `{hasil_str}`")
     st.divider()
 
-    angka_kontrol_dict = calculate_angka_kontrol(probs, n=6)
+    angka_kontrol_dict = calculate_angka_kontrol(probs)
     if angka_kontrol_dict:
         st.subheader("🕵️ Angka Kontrol")
         for label, numbers in angka_kontrol_dict.items():
@@ -238,8 +266,8 @@ if st.session_state.get('run_putaran_analysis', False):
 
                     pred, _ = None, None
                     if metode == "Markov": pred, _ = predict_markov(train_df_for_step, top_n=top_n)
-                    elif metode == "Markov Order-2": pred, _ = predict_markov_order2(train_df_for_step, top_n=top_n)
-                    elif metode == "Markov Gabungan": pred, _ = predict_markov_hybrid(train_df_for_step, top_n=top_n)
+                    elif metode == "Markov Order-2": pred, _ = predict_markov_order2(df, top_n=top_n)
+                    elif metode == "Markov Gabungan": pred, _ = predict_markov_hybrid(df, top_n=top_n)
 
                     if pred is not None:
                         actual_digits = f"{int(actual_row['angka']):04d}"
