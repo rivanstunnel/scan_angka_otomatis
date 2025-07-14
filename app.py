@@ -191,7 +191,6 @@ if st.session_state.get('prediction_data') is not None:
         st.markdown(f"#### **{label}:** `{hasil_str}`")
     st.divider()
 
-    # --- BLOK DIPINDAHKAN KE SINI ---
     with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
         kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
         kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
@@ -212,7 +211,6 @@ if st.session_state.get('prediction_data') is not None:
             st.text_area("Hasil 4D (As-Kop-Kepala-Ekor)", text_4d, height=200)
             st.download_button("Unduh 4D.txt", text_4d, file_name="hasil_4d.txt")
     
-    # --- BLOK SELANJUTNYA ---
     angka_kontrol_dict = calculate_angka_kontrol(probs)
     if angka_kontrol_dict:
         st.subheader("🕵️ Angka Kontrol")
@@ -222,7 +220,9 @@ if st.session_state.get('prediction_data') is not None:
         st.divider()
 
         st.subheader("💣 Rekomendasi Pola Permainan")
-        bbfs_digits = angka_kontrol_dict.get("Jagoan Posisi (AS-KOP-KEP-EKO)", [])[:7]
+        # --- PERUBAHAN SUMBER BBFS ---
+        # Mengambil 7 digit dari Top 2D sebagai sumber BBFS
+        bbfs_digits = angka_kontrol_dict.get("Top 2D (KEP-EKO)", [])[:7]
         
         if bbfs_digits:
             bbfs_str = " ".join(map(str, bbfs_digits))
