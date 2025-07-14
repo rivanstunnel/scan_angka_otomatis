@@ -220,24 +220,26 @@ if st.session_state.get('prediction_data') is not None:
         st.divider()
 
         st.subheader("💣 Rekomendasi Pola Permainan")
-        # --- PERUBAHAN SUMBER BBFS ---
-        # Mengambil 7 digit dari Top 2D sebagai sumber BBFS
-        bbfs_digits = angka_kontrol_dict.get("Top 2D (KEP-EKO)", [])[:7]
         
-        if bbfs_digits:
-            bbfs_str = " ".join(map(str, bbfs_digits))
-            st.markdown(f"##### **BBFS 7 Digit (2D):** `{bbfs_str}`")
-        try:
-            angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_digits)
-            angka_jadi_2d_str = " * ".join(angka_jadi_2d_list) if angka_jadi_2d_list else "-"
-            st.text_area(f"Angka Jadi 2D ({len(angka_jadi_2d_list)} Line)", value=angka_jadi_2d_str)
-        except Exception as e:
-            st.error(f"Terjadi galat saat membuat Angka Jadi 2D: {e}")
-        
-        if bbfs_digits:
-            st.markdown(f"##### **BBFS 7 Digit (4D):** `{bbfs_str}`")
+        # --- Bagian 2D ---
+        bbfs_digits_2d = angka_kontrol_dict.get("Top 2D (KEP-EKO)", [])[:7]
+        if bbfs_digits_2d:
+            bbfs_str_2d = " ".join(map(str, bbfs_digits_2d))
+            st.markdown(f"##### **BBFS 7 Digit (2D):** `{bbfs_str_2d}`")
             try:
-                angka_jadi_4d_list = generate_angka_jadi_4d(probs, bbfs_digits)
+                angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_digits_2d)
+                angka_jadi_2d_str = " * ".join(angka_jadi_2d_list) if angka_jadi_2d_list else "-"
+                st.text_area(f"Angka Jadi 2D ({len(angka_jadi_2d_list)} Line)", value=angka_jadi_2d_str)
+            except Exception as e:
+                st.error(f"Terjadi galat saat membuat Angka Jadi 2D: {e}")
+        
+        # --- Bagian 4D ---
+        bbfs_digits_4d = angka_kontrol_dict.get("Jagoan Posisi (AS-KOP-KEP-EKO)", [])[:7]
+        if bbfs_digits_4d:
+            bbfs_str_4d = " ".join(map(str, bbfs_digits_4d))
+            st.markdown(f"##### **BBFS 7 Digit (4D):** `{bbfs_str_4d}`")
+            try:
+                angka_jadi_4d_list = generate_angka_jadi_4d(probs, bbfs_digits_4d)
                 angka_jadi_4d_str = " * ".join(angka_jadi_4d_list) if angka_jadi_4d_list else "-"
                 st.text_area(f"Angka Jadi 4D ({len(angka_jadi_4d_list)} Line)", value=angka_jadi_4d_str, height=200)
             except Exception as e:
