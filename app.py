@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 import numpy as np
 import re
-from itertools import product
+from itertools import product, permutations
 from markov_model import (
     predict_markov,
     predict_markov_order2,
