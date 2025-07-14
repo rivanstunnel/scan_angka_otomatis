@@ -191,6 +191,28 @@ if st.session_state.get('prediction_data') is not None:
         st.markdown(f"#### **{label}:** `{hasil_str}`")
     st.divider()
 
+    # --- BLOK DIPINDAHKAN KE SINI ---
+    with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
+        kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
+        kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
+        kombinasi_2d_list = ["".join(map(str, p)) for p in product(*result[2:])]
+        separator = " * "
+        text_4d = separator.join(kombinasi_4d_list)
+        text_3d = separator.join(kombinasi_3d_list)
+        text_2d = separator.join(kombinasi_2d_list)
+        tab2d, tab3d, tab4d = st.tabs([f"Kombinasi 2D ({len(kombinasi_2d_list)})", f"Kombinasi 3D ({len(kombinasi_3d_list)})", f"Kombinasi 4D ({len(kombinasi_4d_list)})"])
+
+        with tab2d:
+            st.text_area("Hasil 2D (Kepala-Ekor)", text_2d, height=200)
+            st.download_button("Unduh 2D.txt", text_2d, file_name="hasil_2d.txt")
+        with tab3d:
+            st.text_area("Hasil 3D (Kop-Kepala-Ekor)", text_3d, height=200)
+            st.download_button("Unduh 3D.txt", text_3d, file_name="hasil_3d.txt")
+        with tab4d:
+            st.text_area("Hasil 4D (As-Kop-Kepala-Ekor)", text_4d, height=200)
+            st.download_button("Unduh 4D.txt", text_4d, file_name="hasil_4d.txt")
+    
+    # --- BLOK SELANJUTNYA ---
     angka_kontrol_dict = calculate_angka_kontrol(probs)
     if angka_kontrol_dict:
         st.subheader("🕵️ Angka Kontrol")
@@ -200,8 +222,6 @@ if st.session_state.get('prediction_data') is not None:
         st.divider()
 
         st.subheader("💣 Rekomendasi Pola Permainan")
-        # --- PERUBAHAN SUMBER BBFS ---
-        # Mengambil 7 digit dari Jagoan Posisi sebagai sumber BBFS
         bbfs_digits = angka_kontrol_dict.get("Jagoan Posisi (AS-KOP-KEP-EKO)", [])[:7]
         
         if bbfs_digits:
@@ -223,26 +243,6 @@ if st.session_state.get('prediction_data') is not None:
             except Exception as e:
                 st.error(f"Terjadi galat saat membuat Angka Jadi 4D: {e}")
         st.divider()
-
-    with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
-        kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
-        kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
-        kombinasi_2d_list = ["".join(map(str, p)) for p in product(*result[2:])]
-        separator = " * "
-        text_4d = separator.join(kombinasi_4d_list)
-        text_3d = separator.join(kombinasi_3d_list)
-        text_2d = separator.join(kombinasi_2d_list)
-        tab2d, tab3d, tab4d = st.tabs([f"Kombinasi 2D ({len(kombinasi_2d_list)})", f"Kombinasi 3D ({len(kombinasi_3d_list)})", f"Kombinasi 4D ({len(kombinasi_4d_list)})"])
-
-        with tab2d:
-            st.text_area("Hasil 2D (Kepala-Ekor)", text_2d, height=200)
-            st.download_button("Unduh 2D.txt", text_2d, file_name="hasil_2d.txt")
-        with tab3d:
-            st.text_area("Hasil 3D (Kop-Kepala-Ekor)", text_3d, height=200)
-            st.download_button("Unduh 3D.txt", text_3d, file_name="hasil_3d.txt")
-        with tab4d:
-            st.text_area("Hasil 4D (As-Kop-Kepala-Ekor)", text_4d, height=200)
-            st.download_button("Unduh 4D.txt", text_4d, file_name="hasil_4d.txt")
 
 # --- Bagian Analisis Putaran Terbaik ---
 if st.session_state.get('run_putaran_analysis', False):
