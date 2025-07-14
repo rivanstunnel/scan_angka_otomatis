@@ -200,7 +200,10 @@ if st.session_state.get('prediction_data') is not None:
         st.divider()
 
         st.subheader("💣 Rekomendasi Pola Permainan")
-        bbfs_digits = angka_kontrol_dict.get("Top 2D (KEP-EKO)", [])[:7]
+        # --- PERUBAHAN SUMBER BBFS ---
+        # Mengambil 7 digit dari Jagoan Posisi sebagai sumber BBFS
+        bbfs_digits = angka_kontrol_dict.get("Jagoan Posisi (AS-KOP-KEP-EKO)", [])[:7]
+        
         if bbfs_digits:
             bbfs_str = " ".join(map(str, bbfs_digits))
             st.markdown(f"##### **BBFS 7 Digit (2D):** `{bbfs_str}`")
@@ -211,7 +214,6 @@ if st.session_state.get('prediction_data') is not None:
         except Exception as e:
             st.error(f"Terjadi galat saat membuat Angka Jadi 2D: {e}")
         
-        # --- PERUBAHAN BAGIAN BOM 4D ---
         if bbfs_digits:
             st.markdown(f"##### **BBFS 7 Digit (4D):** `{bbfs_str}`")
             try:
