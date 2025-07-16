@@ -35,15 +35,21 @@ def calculate_angka_kontrol(probabilities):
         return {}
 
     total_probs = np.sum(probabilities, axis=0)
+    # --- PENAMBAHAN TOP 3D ---
+    probs_3d = np.sum(probabilities[1:], axis=0) # Menjumlahkan probabilitas KOP, KEPALA, EKOR
     probs_2d = np.sum(probabilities[2:], axis=0)
 
     # 1. Angka Kontrol (AK) -> 7 digit
     ak_global = np.argsort(total_probs)[-7:][::-1].tolist()
 
+    # --- PENAMBAHAN TOP 3D ---
+    # Kalkulasi Top 3D
+    top_3d = np.argsort(probs_3d)[-7:][::-1].tolist()
+
     # 2. Top 2D (KEP-EKO) -> 7 digit
     top_2d = np.argsort(probs_2d)[-7:][::-1].tolist()
 
-    # 3. Jagoan Posisi (AS-KOP-KEP-EKO) -> 7 digit unik
+    # 3. Top 4D (AS-KOP-KEP-EKO) -> 7 digit unik
     jagoan_per_posisi = np.argmax(probabilities, axis=1).tolist()
     jagoan_final = list(dict.fromkeys(jagoan_per_posisi))
     
@@ -63,9 +69,10 @@ def calculate_angka_kontrol(probabilities):
 
     return {
         "Angka Kontrol (AK)": ak_global,
-        "Top 2D (KEP-EKO)": top_2d,
-        # DIUBAH DI SINI
         "Top 4D (AS-KOP-KEP-EKO)": jagoan_final,
+        # --- PENAMBAHAN TOP 3D ---
+        "Top 3D (KOP-KEP-EKO)": top_3d,
+        "Top 2D (KEP-EKO)": top_2d,
         "Angka Lemah (Hindari)": lemah_global,
     }
 
@@ -235,7 +242,6 @@ if st.session_state.get('prediction_data') is not None:
                 st.error(f"Terjadi galat saat membuat Angka Jadi 2D: {e}")
         
         # --- Bagian 4D ---
-        # DIUBAH DI SINI
         bbfs_digits_4d = angka_kontrol_dict.get("Top 4D (AS-KOP-KEP-EKO)", [])[:7]
         if bbfs_digits_4d:
             bbfs_str_4d = " ".join(map(str, bbfs_digits_4d))
