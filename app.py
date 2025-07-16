@@ -13,13 +13,6 @@ from markov_model import (
 )
 from lokasi_list import lokasi_list
 
-# ==============================================================================
-# --- PENANDA VERSI ---
-# Jika Anda melihat pesan ini di aplikasi, berarti kode baru sudah berjalan.
-st.success("✅ APLIKASI VERSI 2.1 (DINAMIS AKTIF) TELAH DIMUAT")
-# ==============================================================================
-
-
 st.set_page_config(page_title="Analisis Prediksi 4D", layout="wide")
 
 # --- Inisialisasi State Aplikasi ---
@@ -34,9 +27,10 @@ def init_session_state():
 init_session_state()
 
 # --- Fungsi Bantuan ---
-def calculate_angka_kontrol(probabilities, top_n):
+# --- DIKEMBALIKAN KE STATIS 7 DIGIT ---
+def calculate_angka_kontrol(probabilities):
     """
-    Menghitung Angka Kontrol. Panjang digit sekarang dinamis berdasarkan top_n.
+    Menghitung Angka Kontrol. Panjang digit diatur statis ke 7.
     """
     if probabilities is None or probabilities.shape != (4, 10):
         return {}
@@ -45,31 +39,27 @@ def calculate_angka_kontrol(probabilities, top_n):
     probs_3d = np.sum(probabilities[1:], axis=0)
     probs_2d = np.sum(probabilities[2:], axis=0)
 
-    # 1. Angka Kontrol (AK)
-    ak_global = np.argsort(total_probs)[-top_n:][::-1].tolist()
+    # --- DIKEMBALIKAN KE STATIS 7 DIGIT ---
+    ak_global = np.argsort(total_probs)[-7:][::-1].tolist()
+    top_3d = np.argsort(probs_3d)[-7:][::-1].tolist()
+    top_2d = np.argsort(probs_2d)[-7:][::-1].tolist()
 
-    # Kalkulasi Top 3D
-    top_3d = np.argsort(probs_3d)[-top_n:][::-1].tolist()
-
-    # 2. Top 2D (KEP-EKO)
-    top_2d = np.argsort(probs_2d)[-top_n:][::-1].tolist()
-
-    # 3. Top 4D (AS-KOP-KEP-EKO)
+    # --- DIKEMBALIKAN KE STATIS 7 DIGIT ---
     jagoan_per_posisi = np.argmax(probabilities, axis=1).tolist()
     jagoan_final = list(dict.fromkeys(jagoan_per_posisi))
     
     for digit in ak_global:
-        if len(jagoan_final) >= top_n:
+        if len(jagoan_final) >= 7:
             break
         if digit not in jagoan_final:
             jagoan_final.append(digit)
             
-    if len(jagoan_final) < top_n:
+    if len(jagoan_final) < 7:
         sisa_digit = [d for d in range(10) if d not in jagoan_final]
-        needed = top_n - len(jagoan_final)
+        needed = 7 - len(jagoan_final)
         jagoan_final.extend(sisa_digit[:needed])
 
-    # 4. Angka Lemah (Hindari) -> Dibiarkan 2 digit
+    # Angka Lemah tetap 2 digit
     lemah_global = np.argsort(total_probs)[:2].tolist()
 
     return {
@@ -120,7 +110,6 @@ with st.sidebar:
         if st.button("Muat Data API"):
             with st.spinner(f"🔄 Mengambil data untuk {selected_lokasi}..."):
                 try:
-                    # ... (kode API tetap sama)
                     url = f"https://wysiwygscan.com/api?pasaran={selected_lokasi.lower()}&hari={selected_hari}&putaran=1000&format=json&urut=asc"
                     headers = {"Authorization": "Bearer 6705327a2c9a9135f2c8fbad19f09b46"}
                     response = requests.get(url, headers=headers, timeout=20)
@@ -142,12 +131,11 @@ with st.sidebar:
     st.divider()
     putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", 1, 1000, 100)
     metode = st.selectbox("🧠 Metode Analisis", metode_list)
-    top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 4)
+    top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 7) # Ini hanya akan memengaruhi 'Hasil Analisis'
     st.divider()
     st.header("🔬 Analisis Lanjutan")
     jumlah_uji = st.number_input("📊 Jml Data untuk Back-testing", 1, 200, 10, help="...")
     if st.button("🔍 Analisis Putaran Terbaik"):
-        # ... (kode analisis putaran tetap sama)
         total_data_saat_ini = len(st.session_state.get('df_data', []))
         if total_data_saat_ini < jumlah_uji + 11:
             st.warning(f"Butuh minimal {jumlah_uji + 11} data riwayat...")
@@ -184,7 +172,6 @@ if st.session_state.get('prediction_data') is not None:
     st.divider()
 
     with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
-        # ... (kode kombinasi tetap sama)
         kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
         kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
         kombinasi_2d_list = ["".join(map(str, p)) for p in product(*result[2:])]
@@ -197,8 +184,9 @@ if st.session_state.get('prediction_data') is not None:
         with tab3d: st.text_area("Hasil 3D...", text_3d, height=200); st.download_button("Unduh 3D.txt", text_3d)
         with tab4d: st.text_area("Hasil 4D...", text_4d, height=200); st.download_button("Unduh 4D.txt", text_4d)
     
-    # Memanggil fungsi dengan `top_n` yang dinamis
-    angka_kontrol_dict = calculate_angka_kontrol(probs, top_n)
+    # --- DIKEMBALIKAN KE STATIS 7 DIGIT ---
+    # Memanggil fungsi tanpa top_n
+    angka_kontrol_dict = calculate_angka_kontrol(probs)
     if angka_kontrol_dict:
         st.subheader("🕵️ Angka Kontrol")
         for label, numbers in angka_kontrol_dict.items():
@@ -208,7 +196,6 @@ if st.session_state.get('prediction_data') is not None:
         st.subheader("💣 Rekomendasi Pola Permainan")
         bbfs_digits_2d = angka_kontrol_dict.get("Top 2D (KEP-EKO)", [])[:7]
         if bbfs_digits_2d:
-            # ... (kode rekomendasi 2D tetap sama)
             st.markdown(f"##### **BBFS 7 Digit (2D):** `{' '.join(map(str, bbfs_digits_2d))}`")
             try:
                 angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_digits_2d)
@@ -216,7 +203,6 @@ if st.session_state.get('prediction_data') is not None:
             except Exception as e: st.error(f"Galat 2D: {e}")
         bbfs_digits_4d = angka_kontrol_dict.get("Top 4D (AS-KOP-KEP-EKO)", [])[:7]
         if bbfs_digits_4d:
-            # ... (kode rekomendasi 4D tetap sama)
             st.markdown(f"##### **BBFS 7 Digit (4D):** `{' '.join(map(str, bbfs_digits_4d))}`")
             try:
                 angka_jadi_4d_list = generate_angka_jadi_4d(probs, bbfs_digits_4d)
