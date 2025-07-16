@@ -50,7 +50,6 @@ def analyze_advanced_patterns(historical_df):
     patterns['kembar_kop_ekor'] = check_twin_freq(1, 3)
     return patterns
 
-# --- FUNGSI BARU UNTUK MENGHASILKAN AI/CT 2D ---
 def generate_2d_ai_ct(historical_df):
     """
     Menghasilkan 5 set angka kontrol 7-digit untuk 2D Depan, Tengah, & Belakang
@@ -232,7 +231,6 @@ if st.session_state.get('prediction_data') is not None:
                 st.text_input("Kembar As-Ekor", value=patterns.get('kembar_as_ekor'), disabled=True)
                 st.text_input("Kembar Kop-Ekor", value=patterns.get('kembar_kop_ekor'), disabled=True)
         
-        # --- BAGIAN BARU UNTUK AI/CT 2D ---
         st.markdown("---", help="Pemisah Bagian")
         ai_ct_results = generate_2d_ai_ct(df)
         if ai_ct_results:
@@ -244,8 +242,9 @@ if st.session_state.get('prediction_data') is not None:
                     text_content = ""
                     if data_key in ai_ct_results:
                         for row in ai_ct_results[data_key]:
-                            text_content += " ".join(map(str, row)) + "\n"
-                    st.text_area(label=f"_{title}", value=text_content.strip(), height=140, disabled=True, key=f"ct_{data_key}", label_visibility="collapsed")
+                            text_content += "".join(map(str, row)) + "\n"
+                    # --- PERUBAHAN DI SINI: `disabled=True` dihapus ---
+                    st.text_area(label=f"_{title}", value=text_content.strip(), height=140, key=f"ct_{data_key}", label_visibility="collapsed")
 
             display_card(ct1, "AI/CT 2D Depan", "depan")
             display_card(ct2, "AI/CT 2D Tengah", "tengah")
