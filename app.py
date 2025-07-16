@@ -27,51 +27,52 @@ def init_session_state():
 init_session_state()
 
 # --- Fungsi Bantuan ---
-def calculate_angka_kontrol(probabilities):
+# --- DIUBAH MENJADI DINAMIS ---
+def calculate_angka_kontrol(probabilities, top_n):
     """
-    Menghitung Angka Kontrol berdasarkan matriks probabilitas.
+    Menghitung Angka Kontrol. Panjang digit sekarang dinamis berdasarkan top_n.
     """
     if probabilities is None or probabilities.shape != (4, 10):
         return {}
 
     total_probs = np.sum(probabilities, axis=0)
-    # --- PENAMBAHAN TOP 3D ---
-    probs_3d = np.sum(probabilities[1:], axis=0) # Menjumlahkan probabilitas KOP, KEPALA, EKOR
+    probs_3d = np.sum(probabilities[1:], axis=0)
     probs_2d = np.sum(probabilities[2:], axis=0)
 
-    # 1. Angka Kontrol (AK) -> 7 digit
-    ak_global = np.argsort(total_probs)[-7:][::-1].tolist()
+    # --- DIUBAH MENJADI DINAMIS ---
+    # 1. Angka Kontrol (AK)
+    ak_global = np.argsort(total_probs)[-top_n:][::-1].tolist()
 
-    # --- PENAMBAHAN TOP 3D ---
+    # --- DIUBAH MENJADI DINAMIS ---
     # Kalkulasi Top 3D
-    top_3d = np.argsort(probs_3d)[-7:][::-1].tolist()
+    top_3d = np.argsort(probs_3d)[-top_n:][::-1].tolist()
 
-    # 2. Top 2D (KEP-EKO) -> 7 digit
-    top_2d = np.argsort(probs_2d)[-7:][::-1].tolist()
+    # --- DIUBAH MENJADI DINAMIS ---
+    # 2. Top 2D (KEP-EKO)
+    top_2d = np.argsort(probs_2d)[-top_n:][::-1].tolist()
 
-    # 3. Top 4D (AS-KOP-KEP-EKO) -> 7 digit unik
+    # --- DIUBAH MENJADI DINAMIS ---
+    # 3. Top 4D (AS-KOP-KEP-EKO)
     jagoan_per_posisi = np.argmax(probabilities, axis=1).tolist()
     jagoan_final = list(dict.fromkeys(jagoan_per_posisi))
     
     for digit in ak_global:
-        if len(jagoan_final) >= 7:
+        if len(jagoan_final) >= top_n:
             break
         if digit not in jagoan_final:
             jagoan_final.append(digit)
             
-    if len(jagoan_final) < 7:
+    if len(jagoan_final) < top_n:
         sisa_digit = [d for d in range(10) if d not in jagoan_final]
-        needed = 7 - len(jagoan_final)
+        needed = top_n - len(jagoan_final)
         jagoan_final.extend(sisa_digit[:needed])
 
-    # 4. Angka Lemah (Hindari) -> 2 digit
+    # 4. Angka Lemah (Hindari) -> Dibiarkan 2 digit
     lemah_global = np.argsort(total_probs)[:2].tolist()
 
-    # Mengembalikan kamus dengan urutan yang benar
     return {
         "Angka Kontrol (AK)": ak_global,
         "Top 4D (AS-KOP-KEP-EKO)": jagoan_final,
-        # --- PENAMBAHAN TOP 3D ---
         "Top 3D (KOP-KEP-EKO)": top_3d,
         "Top 2D (KEP-EKO)": top_2d,
         "Angka Lemah (Hindari)": lemah_global,
@@ -150,7 +151,8 @@ with st.sidebar:
     st.divider()
     putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", 1, 1000, 100)
     metode = st.selectbox("🧠 Metode Analisis", metode_list)
-    top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 8)
+    # Pilihan ini sekarang akan mengontrol semua panjang digit
+    top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 4) # Default diubah ke 4 agar sesuai contoh
     st.divider()
 
     st.header("🔬 Analisis Lanjutan")
@@ -220,10 +222,11 @@ if st.session_state.get('prediction_data') is not None:
             st.text_area("Hasil 4D (As-Kop-Kepala-Ekor)", text_4d, height=200)
             st.download_button("Unduh 4D.txt", text_4d, file_name="hasil_4d.txt")
     
-    angka_kontrol_dict = calculate_angka_kontrol(probs)
+    # --- DIUBAH MENJADI DINAMIS ---
+    # Memanggil fungsi dengan `top_n`
+    angka_kontrol_dict = calculate_angka_kontrol(probs, top_n)
     if angka_kontrol_dict:
         st.subheader("🕵️ Angka Kontrol")
-        # Loop ini akan secara otomatis menampilkan Top 3D karena sudah ada di dalam dict
         for label, numbers in angka_kontrol_dict.items():
             numbers_str = " ".join(map(str, numbers))
             st.markdown(f"#### **{label}:** `{numbers_str}`")
@@ -231,6 +234,7 @@ if st.session_state.get('prediction_data') is not None:
 
         st.subheader("💣 Rekomendasi Pola Permainan")
         
+        # Catatan: Bagian BBFS sengaja dibiarkan 7 digit sesuai labelnya
         # --- Bagian 2D ---
         bbfs_digits_2d = angka_kontrol_dict.get("Top 2D (KEP-EKO)", [])[:7]
         if bbfs_digits_2d:
@@ -257,7 +261,71 @@ if st.session_state.get('prediction_data') is not None:
         st.divider()
 
 # --- Bagian Analisis Putaran Terbaik ---
-# Sisa kode ini tidak diubah dan tidak perlu disalin ulang jika sudah benar
 if st.session_state.get('run_putaran_analysis', False):
-    # ... (kode analisis putaran yang sudah ada) ...
-    pass
+    st.header("🔬 Hasil Analisis Putaran Terbaik")
+    with st.spinner("Menganalisis berbagai jumlah putaran... Ini akan memakan waktu."):
+        full_df = st.session_state.get('df_data', pd.DataFrame())
+        putaran_results = {}
+        max_putaran_test = len(full_df) - jumlah_uji
+        start_putaran = 11
+        end_putaran = max_putaran_test
+        step_putaran = 1
+
+        if end_putaran < start_putaran:
+            st.warning(f"Data tidak cukup untuk pengujian. Butuh setidaknya {start_putaran + jumlah_uji} total data riwayat.")
+        else:
+            test_range = list(range(start_putaran, end_putaran + 1, step_putaran))
+            progress_bar = st.progress(0, text="Memulai analisis...")
+            for i, p in enumerate(test_range):
+                total_benar_for_p = 0
+                total_digits_for_p = 0
+                for j in range(jumlah_uji):
+                    end_index = len(full_df) - jumlah_uji + j
+                    start_index = end_index - p
+                    if start_index < 0: continue
+                    train_df_for_step = full_df.iloc[start_index:end_index]
+                    actual_row = full_df.iloc[end_index]
+                    if len(train_df_for_step) < 11: continue
+
+                    pred, _ = None, None
+                    if metode == "Markov": pred, _ = predict_markov(train_df_for_step, top_n=top_n)
+                    elif metode == "Markov Order-2": pred, _ = predict_markov_order2(df, top_n=top_n)
+                    elif metode == "Markov Gabungan": pred, _ = predict_markov_hybrid(df, top_n=top_n)
+
+                    if pred is not None:
+                        actual_digits = f"{int(actual_row['angka']):04d}"
+                        for k in range(4):
+                            if int(actual_digits[k]) in pred[k]:
+                                total_benar_for_p += 1
+                        total_digits_for_p += 4
+
+                accuracy = (total_benar_for_p / total_digits_for_p * 100) if total_digits_for_p > 0 else 0
+                if accuracy > 0:
+                    putaran_results[p] = accuracy
+                
+                progress_text = f"Menganalisis {p} putaran... ({i+1}/{len(test_range)})"
+                progress_bar.progress((i + 1) / len(test_range), text=progress_text)
+
+            progress_bar.empty()
+
+            if not putaran_results:
+                st.error("Tidak dapat menemukan hasil akurasi. Coba dengan metode atau data yang berbeda.")
+            else:
+                best_putaran = max(putaran_results, key=putaran_results.get)
+                best_accuracy = putaran_results[best_putaran]
+
+                st.subheader("🏆 Rekomendasi Penggunaan Data")
+                m1, m2 = st.columns(2)
+                m1.metric("Putaran Terbaik", f"{best_putaran} Data", "Jumlah data historis")
+                m2.metric("Akurasi Tertinggi", f"{best_accuracy:.2f}%", f"Dengan {best_putaran} data")
+
+                chart_data = pd.DataFrame.from_dict(putaran_results, orient='index', columns=['Akurasi (%)'])
+                chart_data.index.name = 'Jumlah Putaran'
+                st.line_chart(chart_data)
+
+                st.subheader(f"📜 Tabel Hasil Analisis Putaran (Rentang {start_putaran}-{end_putaran})")
+                sorted_chart_data = chart_data.sort_values(by='Akurasi (%)', ascending=False)
+                sorted_chart_data['Akurasi (%)'] = sorted_chart_data['Akurasi (%)'].map('{:.2f}%'.format)
+                st.dataframe(sorted_chart_data, use_container_width=True)
+
+    st.session_state.run_putaran_analysis = False
