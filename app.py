@@ -218,95 +218,87 @@ if st.session_state.get('prediction_data') is not None:
     result = prediction_data["result"]
     probs = prediction_data["probs"]
 
-    # --- PERUBAHAN TATA LETAK ---
-    col1, col2 = st.columns([0.55, 0.45])
-    
-    with col1:
-        st.subheader(f"🎯 Hasil Analisis Top {top_n} Digit")
-        labels = ["As", "Kop", "Kepala", "Ekor"]
-        for i, label in enumerate(labels):
+    # --- PERUBAHAN TATA LETAK: Menggunakan satu kolom utama ---
+    st.subheader(f"🎯 Hasil Analisis Top {top_n} Digit")
+    labels = ["As", "Kop", "Kepala", "Ekor"]
+    # Tampilkan hasil top digit dalam 2 kolom agar rapi
+    top_cols = st.columns(2)
+    for i, label in enumerate(labels):
+        with top_cols[i % 2]:
             hasil_str = ", ".join(map(str, result[i]))
             st.markdown(f"**{label}:** `{hasil_str}`")
-        
-        with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
-            kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
-            kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
-            kombinasi_2d_list = ["".join(map(str, p)) for p in product(*result[2:])]
-            separator = " * "
-            text_4d = separator.join(kombinasi_4d_list)
-            text_3d = separator.join(kombinasi_3d_list)
-            text_2d = separator.join(kombinasi_2d_list)
-            tab2d, tab3d, tab4d = st.tabs([f"2D ({len(kombinasi_2d_list)})", f"3D ({len(kombinasi_3d_list)})", f"4D ({len(kombinasi_4d_list)})"])
-            with tab2d: st.text_area("Hasil 2D...", text_2d, height=150, key="txt2d"); st.download_button("Unduh 2D.txt", text_2d, key="dl2d")
-            with tab3d: st.text_area("Hasil 3D...", text_3d, height=150, key="txt3d"); st.download_button("Unduh 3D.txt", text_3d, key="dl3d")
-            with tab4d: st.text_area("Hasil 4D...", text_4d, height=150, key="txt4d"); st.download_button("Unduh 4D.txt", text_4d, key="dl4d")
+    
+    with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
+        kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
+        kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
+        kombinasi_2d_list = ["".join(map(str, p)) for p in product(*result[2:])]
+        separator = " * "
+        text_4d, text_3d, text_2d = separator.join(kombinasi_4d_list), separator.join(kombinasi_3d_list), separator.join(kombinasi_2d_list)
+        tab2d, tab3d, tab4d = st.tabs([f"2D ({len(kombinasi_2d_list)})", f"3D ({len(kombinasi_3d_list)})", f"4D ({len(kombinasi_4d_list)})"])
+        with tab2d: st.text_area("Hasil 2D...", text_2d, height=150, key="txt2d"); st.download_button("Unduh 2D.txt", text_2d, key="dl2d")
+        with tab3d: st.text_area("Hasil 3D...", text_3d, height=150, key="txt3d"); st.download_button("Unduh 3D.txt", text_3d, key="dl3d")
+        with tab4d: st.text_area("Hasil 4D...", text_4d, height=150, key="txt4d"); st.download_button("Unduh 4D.txt", text_4d, key="dl4d")
 
-        st.divider()
-        # --- Pola Lanjutan dipindahkan ke sini ---
-        st.subheader("💡 Pola Lanjutan (Data Historis)")
-        patterns = analyze_advanced_patterns(df)
-        if patterns:
-            sub_col1, sub_col2 = st.columns(2)
-            with sub_col1:
-                st.text_input("As Off", value=patterns.get('as_off'), disabled=True, key="as_off")
-                st.text_input("Kepala Off", value=patterns.get('kepala_off'), disabled=True, key="kep_off")
-                st.markdown("---")
-                st.text_input("Kembar Depan", value=patterns.get('kembar_depan'), disabled=True, key="kd")
-                st.text_input("Kembar Tengah", value=patterns.get('kembar_tengah'), disabled=True, key="kt")
-                st.text_input("Kembar Belakang", value=patterns.get('kembar_belakang'), disabled=True, key="kb")
-            with sub_col2:
-                st.text_input("Kop Off", value=patterns.get('kop_off'), disabled=True, key="kop_off")
-                st.text_input("Ekor Off", value=patterns.get('ekor_off'), disabled=True, key="ekor_off")
-                st.markdown("---")
-                st.text_input("Kembar As-Kepala", value=patterns.get('kembar_as_kep'), disabled=True, key="kak")
-                st.text_input("Kembar As-Ekor", value=patterns.get('kembar_as_ekor'), disabled=True, key="kae")
-                st.text_input("Kembar Kop-Ekor", value=patterns.get('kembar_kop_ekor'), disabled=True, key="kke")
+    st.divider()
 
-    with col2:
-        st.subheader("AI/CT Berdasarkan Histori")
-        ai_ct_results = generate_ai_ct_patterns(df)
-        if ai_ct_results:
-            ct1, ct2, ct3 = st.columns(3)
-            def display_card(column, title, data_key, main_data):
-                with column:
-                    st.markdown(f'<p style="background-color:#B22222; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">{title}</p>', unsafe_allow_html=True)
-                    text_content = "\n".join(["".join(map(str, row)) for row in main_data.get(data_key, [])])
-                    st.text_area(label=f"_{title}", value=text_content, height=140, key=f"ct_{data_key}", label_visibility="collapsed")
-            display_card(ct1, "AI/CT 2D Depan", "2d_depan", ai_ct_results)
-            display_card(ct2, "AI/CT 2D Tengah", "2d_tengah", ai_ct_results)
-            display_card(ct3, "AI/CT 2D Belakang", "2d_belakang", ai_ct_results)
+    # --- Pola Lanjutan dipindahkan ke sini ---
+    st.subheader("💡 Pola Lanjutan (Data Historis)")
+    patterns = analyze_advanced_patterns(df)
+    if patterns:
+        sub_col1, sub_col2 = st.columns(2)
+        with sub_col1:
+            st.text_input("As Off", value=patterns.get('as_off'), disabled=True, key="as_off")
+            st.text_input("Kepala Off", value=patterns.get('kepala_off'), disabled=True, key="kep_off")
+            st.text_input("Kembar Depan", value=patterns.get('kembar_depan'), disabled=True, key="kd")
+            st.text_input("Kembar Tengah", value=patterns.get('kembar_tengah'), disabled=True, key="kt")
+            st.text_input("Kembar Belakang", value=patterns.get('kembar_belakang'), disabled=True, key="kb")
+        with sub_col2:
+            st.text_input("Kop Off", value=patterns.get('kop_off'), disabled=True, key="kop_off")
+            st.text_input("Ekor Off", value=patterns.get('ekor_off'), disabled=True, key="ekor_off")
+            st.text_input("Kembar As-Kepala", value=patterns.get('kembar_as_kep'), disabled=True, key="kak")
+            st.text_input("Kembar As-Ekor", value=patterns.get('kembar_as_ekor'), disabled=True, key="kae")
+            st.text_input("Kembar Kop-Ekor", value=patterns.get('kembar_kop_ekor'), disabled=True, key="kke")
+    
+    st.divider()
+    
+    # --- AI/CT Berdasarkan Histori dipindahkan ke sini ---
+    st.subheader("AI/CT Berdasarkan Histori")
+    ai_ct_results = generate_ai_ct_patterns(df)
+    if ai_ct_results:
+        ct1, ct2, ct3 = st.columns(3)
+        def display_card(column, title, data_key, main_data):
+            with column:
+                st.markdown(f'<p style="background-color:#B22222; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">{title}</p>', unsafe_allow_html=True)
+                text_content = "\n".join(["".join(map(str, row)) for row in main_data.get(data_key, [])])
+                st.text_area(label=f"_{title}", value=text_content, height=140, key=f"ct_{data_key}", label_visibility="collapsed")
+        display_card(ct1, "AI/CT 2D Depan", "2d_depan", ai_ct_results)
+        display_card(ct2, "AI/CT 2D Tengah", "2d_tengah", ai_ct_results)
+        display_card(ct3, "AI/CT 2D Belakang", "2d_belakang", ai_ct_results)
 
     st.divider()
     st.subheader("Pola 4D Lengkap (Berdasarkan Prediksi)")
     st.info("Catatan: Menampilkan daftar 4D ON/OFF secara penuh dapat memperlambat kinerja aplikasi.")
     
     col4d_1, col4d_2, col4d_3 = st.columns(3)
-    
     with col4d_1:
         st.markdown(f'<p style="background-color:#4682B4; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">AI/CT 4D</p>', unsafe_allow_html=True)
         if ai_ct_results:
             text_content_4d = "\n".join(["".join(map(str, row)) for row in ai_ct_results.get("4d", [])])
             st.text_area(label="_ai_ct_4d", value=text_content_4d, height=180, key="ai_ct_4d", label_visibility="collapsed")
-
     patterns_on_off = generate_on_off_patterns(result, probs)
     with col4d_2:
         st.markdown(f'<p style="background-color:#2E8B57; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">4D ON</p>', unsafe_allow_html=True)
         if patterns_on_off:
-            on_list = patterns_on_off['on']
-            text_content_on = " * ".join(on_list)
-            st.text_area("_4d_on_display", value=text_content_on, height=180, key="4d_on_display")
-    
+            st.text_area("_4d_on_display", value=" * ".join(patterns_on_off['on']), height=180, key="4d_on_display")
     with col4d_3:
         st.markdown(f'<p style="background-color:#B22222; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">4D OFF</p>', unsafe_allow_html=True)
         if patterns_on_off:
-            off_list = patterns_on_off['off']
-            text_content_off = " * ".join(off_list)
-            st.text_area("_4d_off_display", value=text_content_off, height=180, key="4d_off_display")
+            st.text_area("_4d_off_display", value=" * ".join(patterns_on_off['off']), height=180, key="4d_off_display")
 
 # TAMPILAN HASIL ANALISIS PUTARAN TERBAIK
 if st.session_state.get('putaran_results') is not None:
     st.header("🔬 Hasil Analisis Putaran Terbaik")
-    putaran_results = st.session_state.putaran_results
+    putaran_results = st.session_state.get('putaran_results')
     if not putaran_results:
         st.error("Tidak dapat menemukan hasil akurasi. Coba dengan metode atau data yang berbeda.")
     else:
