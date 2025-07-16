@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 import numpy as np
 import re
-from itertools import product
+from itertools import product, permutations
 from markov_model import (
     predict_markov,
     predict_markov_order2,
@@ -27,59 +27,51 @@ def init_session_state():
 init_session_state()
 
 # --- Fungsi Bantuan ---
-
-# --- FUNGSI HYBRID ---
-def calculate_angka_kontrol(probabilities, top_n):
+def calculate_angka_kontrol(probabilities):
     """
-    Fungsi hybrid yang menghasilkan KEDUA format Angka Kontrol:
-    1. Format multi-baris baru untuk 'Angka Kontrol (AK)'.
-    2. Format kamus lama untuk 'Detail Kontrol' dan 'Pola Permainan'.
+    Menghitung Angka Kontrol berdasarkan matriks probabilitas sesuai permintaan baru.
     """
     if probabilities is None or probabilities.shape != (4, 10):
-        return {"multi_line_ak": [], "detail_controls": {}}
+        return {}
 
-    # === BAGIAN 1: Menghitung Detail Kontrol (Logika Lama) ===
     total_probs = np.sum(probabilities, axis=0)
     probs_2d = np.sum(probabilities[2:], axis=0)
-    
-    # Membuat semua panjangnya dinamis sesuai `top_n`
-    ak_global_detail = np.argsort(total_probs)[-top_n:][::-1].tolist()
-    top_2d_detail = np.argsort(probs_2d)[-top_n:][::-1].tolist()
-    
+
+    # 1. Angka Kontrol (AK) -> 7 digit
+    ak_global = np.argsort(total_probs)[-7:][::-1].tolist()
+
+    # 2. Top 2D (KEP-EKO) -> 7 digit
+    top_2d = np.argsort(probs_2d)[-7:][::-1].tolist()
+
+    # 3. Jagoan Posisi (AS-KOP-KEP-EKO) -> 7 digit unik
     jagoan_per_posisi = np.argmax(probabilities, axis=1).tolist()
-    jagoan_final_detail = list(dict.fromkeys(jagoan_per_posisi))
-    for digit in ak_global_detail:
-        if len(jagoan_final_detail) >= top_n: break
-        if digit not in jagoan_final_detail: jagoan_final_detail.append(digit)
+    jagoan_final = list(dict.fromkeys(jagoan_per_posisi))
     
-    if len(jagoan_final_detail) < top_n:
-        sisa_digit = [d for d in range(10) if d not in jagoan_final_detail]
-        jagoan_final_detail.extend(sisa_digit[:(top_n - len(jagoan_final_detail))])
+    for digit in ak_global:
+        if len(jagoan_final) >= 7:
+            break
+        if digit not in jagoan_final:
+            jagoan_final.append(digit)
+            
+    if len(jagoan_final) < 7:
+        sisa_digit = [d for d in range(10) if d not in jagoan_final]
+        needed = 7 - len(jagoan_final)
+        jagoan_final.extend(sisa_digit[:needed])
 
-    lemah_global_detail = np.argsort(total_probs)[:2].tolist()
+    # 4. Angka Lemah (Hindari) -> 2 digit
+    lemah_global = np.argsort(total_probs)[:2].tolist()
 
-    detail_controls = {
-        "Top 2D (KEP-EKO)": top_2d_detail,
-        "Jagoan Posisi (AS-KOP-KEP-EKO)": jagoan_final_detail,
-        "Angka Lemah (Hindari)": lemah_global_detail,
+    return {
+        "Angka Kontrol (AK)": ak_global,
+        "Top 2D (KEP-EKO)": top_2d,
+        "Jagoan Posisi (AS-KOP-KEP-EKO)": jagoan_final,
+        "Angka Lemah (Hindari)": lemah_global,
     }
-
-    # === BAGIAN 2: Menghitung Angka Kontrol (Logika Baru Multi-baris) ===
-    # Sumber angka diambil dari Jagoan Posisi yang sudah dihitung
-    sumber_angka = jagoan_final_detail
-    
-    multi_line_ak = []
-    for _ in range(top_n):
-        line_digits = np.random.choice(sumber_angka, size=top_n, replace=True)
-        line_str = "".join(map(str, line_digits))
-        multi_line_ak.append(line_str)
-        
-    return {"multi_line_ak": multi_line_ak, "detail_controls": detail_controls}
-
 
 def generate_angka_jadi_2d(probabilities, bbfs_digits):
     """Menghasilkan semua kombinasi 2D dari digit BBFS dan mengurutkannya."""
-    if probabilities is None or not bbfs_digits: return []
+    if probabilities is None or not bbfs_digits:
+        return []
     all_2d_lines = list(product(bbfs_digits, repeat=2))
     scored_lines = []
     for line in all_2d_lines:
@@ -90,10 +82,10 @@ def generate_angka_jadi_2d(probabilities, bbfs_digits):
     sorted_lines = sorted(scored_lines, key=lambda x: x[1], reverse=True)
     return [line[0] for line in sorted_lines]
 
-
 def generate_angka_jadi_4d(probabilities, bbfs_source_digits):
     """Menghasilkan semua kombinasi 4D dari digit BBFS dan mengurutkannya."""
-    if probabilities is None or not bbfs_source_digits: return []
+    if probabilities is None or not bbfs_source_digits:
+        return []
     all_4d_lines = list(product(bbfs_source_digits, repeat=4))
     scored_lines = []
     for line in all_4d_lines:
@@ -115,7 +107,9 @@ metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
 # --- Sidebar ---
 with st.sidebar:
     st.header("⚙️ Pengaturan")
-    data_source = st.radio("Sumber Data", ("API", "Input Manual"), horizontal=True, key='data_source_selector')
+    data_source = st.radio(
+        "Sumber Data", ("API", "Input Manual"), horizontal=True, key='data_source_selector'
+    )
 
     if data_source == "API":
         hari_list = ["harian", "kemarin", "2hari", "3hari", "4hari", "5hari"]
@@ -132,30 +126,33 @@ with st.sidebar:
                     all_angka = [item["result"] for item in data.get("data", []) if len(item["result"]) == 4 and item["result"].isdigit()]
                     st.session_state.df_data = pd.DataFrame({"angka": all_angka})
                     st.session_state.prediction_data = None
-                    st.success(f"Berhasil memuat {len(all_angka)} data.")
                 except Exception as e:
                     st.error(f"❌ Gagal ambil data API: {e}")
                     st.session_state.df_data = pd.DataFrame()
     else: # Input Manual
-        manual_data_input = st.text_area("📋 Masukkan Data Keluaran", height=150, placeholder="Contoh: 1234 5678, 9012...")
+        manual_data_input = st.text_area(
+            "📋 Masukkan Data Keluaran", height=150, placeholder="Contoh: 1234 5678, 9012..."
+        )
         if st.button("Proses Data Manual"):
             angka_list = re.findall(r'\b\d{4}\b', manual_data_input)
             st.session_state.df_data = pd.DataFrame({"angka": angka_list})
             st.session_state.prediction_data = None
-            st.success(f"Berhasil memproses {len(angka_list)} data.")
 
     st.divider()
     putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", 1, 1000, 100)
     metode = st.selectbox("🧠 Metode Analisis", metode_list)
-    top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 7)
+    top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 8)
     st.divider()
 
     st.header("🔬 Analisis Lanjutan")
-    jumlah_uji = st.number_input("📊 Jml Data untuk Back-testing", 1, 200, 10, help="Berapa banyak data terakhir yang akan dijadikan 'kunci jawaban' untuk menguji akurasi.")
+    jumlah_uji = st.number_input(
+        "📊 Jml Data untuk Back-testing", 1, 200, 10,
+        help="Berapa banyak data terakhir yang akan dijadikan 'kunci jawaban' untuk menguji akurasi setiap skenario putaran."
+    )
     if st.button("🔍 Analisis Putaran Terbaik"):
         total_data_saat_ini = len(st.session_state.get('df_data', []))
         if total_data_saat_ini < jumlah_uji + 11:
-            st.warning(f"Butuh minimal {jumlah_uji + 11} data riwayat. Saat ini hanya ada {total_data_saat_ini} data.")
+            st.warning(f"Butuh minimal {jumlah_uji + 11} data riwayat untuk pengujian ini. Saat ini hanya ada **{total_data_saat_ini}** data.")
         else:
             st.session_state.run_putaran_analysis = True
             st.session_state.prediction_data = None
@@ -174,16 +171,13 @@ if st.button("📈 Analisis Sekarang!", use_container_width=True):
     if len(df) < 11:
         st.warning("❌ Minimal 11 data diperlukan untuk analisis.")
     else:
-        with st.spinner("⏳ Menganalisis..."):
+        with st.spinner("⏳ Melakukan analisis..."):
             result, probs = None, None
             if metode == "Markov": result, probs = predict_markov(df, top_n=top_n)
             elif metode == "Markov Order-2": result, probs = predict_markov_order2(df, top_n=top_n)
             elif metode == "Markov Gabungan": result, probs = predict_markov_hybrid(df, top_n=top_n)
-            
             if result is not None:
                 st.session_state.prediction_data = {"result": result, "probs": probs}
-            else:
-                st.error("Gagal melakukan analisis. Periksa kembali data input.")
 
 if st.session_state.get('prediction_data') is not None:
     prediction_data = st.session_state.prediction_data
@@ -192,84 +186,82 @@ if st.session_state.get('prediction_data') is not None:
 
     st.subheader(f"🎯 Hasil Analisis Top {top_n} Digit")
     labels = ["As", "Kop", "Kepala", "Ekor"]
-    cols = st.columns(4)
     for i, label in enumerate(labels):
-        with cols[i]:
-            hasil_str = ", ".join(map(str, result[i]))
-            st.markdown(f"#### **{label}:**")
-            st.code(hasil_str, language="text")
+        hasil_str = ", ".join(map(str, result[i]))
+        st.markdown(f"#### **{label}:** `{hasil_str}`")
     st.divider()
 
-    # Memanggil fungsi hybrid untuk mendapatkan semua hasil kontrol
-    hasil_kontrol = calculate_angka_kontrol(probs, top_n)
-    multi_line_ak_list = hasil_kontrol["multi_line_ak"]
-    detail_controls_dict = hasil_kontrol["detail_controls"]
+    with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
+        kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
+        kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
+        kombinasi_2d_list = ["".join(map(str, p)) for p in product(*result[2:])]
+        separator = " * "
+        text_4d = separator.join(kombinasi_4d_list)
+        text_3d = separator.join(kombinasi_3d_list)
+        text_2d = separator.join(kombinasi_2d_list)
+        tab2d, tab3d, tab4d = st.tabs([f"Kombinasi 2D ({len(kombinasi_2d_list)})", f"Kombinasi 3D ({len(kombinasi_3d_list)})", f"Kombinasi 4D ({len(kombinasi_4d_list)})"])
 
-    # --- TAMPILAN ANGKA KONTROL BARU ---
-    st.subheader("🕵️ Angka Kontrol (AK)")
-    if multi_line_ak_list:
-        for line in multi_line_ak_list:
-            st.code(line, language="text")
-    else:
-        st.info("Tidak dapat menghasilkan Angka Kontrol.")
-    st.divider()
-
-    # --- TAMPILAN DETAIL KONTROL & POLA LAMA ---
-    if detail_controls_dict:
-        st.subheader("📊 Detail Kontrol & Rekomendasi Pola Permainan")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("##### **Detail Angka Kontrol**")
-            for label, numbers in detail_controls_dict.items():
-                numbers_str = " ".join(map(str, numbers))
-                st.markdown(f"**{label}:** `{numbers_str}`")
-
-        with col2:
-            st.markdown("##### **Rekomendasi Pola BBFS**")
-            bbfs_4d_source = detail_controls_dict.get("Jagoan Posisi (AS-KOP-KEP-EKO)", [])
-            bbfs_2d_source = detail_controls_dict.get("Top 2D (KEP-EKO)", [])
-            
-            bbfs_7d_4d = bbfs_4d_source[:7]
-            if bbfs_7d_4d:
-                st.markdown(f"**BBFS 7 Digit (4D):** `{' '.join(map(str, bbfs_7d_4d))}`")
-
-            bbfs_7d_2d = bbfs_2d_source[:7]
-            if bbfs_7d_2d:
-                st.markdown(f"**BBFS 7 Digit (2D):** `{' '.join(map(str, bbfs_7d_2d))}`")
-
-        tab2d, tab4d = st.tabs(["Angka Jadi 2D", "Angka Jadi 4D"])
-        
         with tab2d:
-            bbfs_2d_final = detail_controls_dict.get("Top 2D (KEP-EKO)", [])[:7]
-            if bbfs_2d_final:
-                angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_2d_final)
-                st.text_area(f"Urutan 2D Terbaik dari BBFS 7 Digit ({len(angka_jadi_2d_list)} Line)", " ".join(angka_jadi_2d_list), height=150)
-
+            st.text_area("Hasil 2D (Kepala-Ekor)", text_2d, height=200)
+            st.download_button("Unduh 2D.txt", text_2d, file_name="hasil_2d.txt")
+        with tab3d:
+            st.text_area("Hasil 3D (Kop-Kepala-Ekor)", text_3d, height=200)
+            st.download_button("Unduh 3D.txt", text_3d, file_name="hasil_3d.txt")
         with tab4d:
-            bbfs_4d_final = detail_controls_dict.get("Jagoan Posisi (AS-KOP-KEP-EKO)", [])[:7]
-            if bbfs_4d_final:
-                angka_jadi_4d_list = generate_angka_jadi_4d(probs, bbfs_4d_final)
-                st.text_area(f"Urutan 4D Terbaik dari BBFS 7 Digit ({len(angka_jadi_4d_list)} Line)", " ".join(angka_jadi_4d_list), height=200)
+            st.text_area("Hasil 4D (As-Kop-Kepala-Ekor)", text_4d, height=200)
+            st.download_button("Unduh 4D.txt", text_4d, file_name="hasil_4d.txt")
     
-    st.divider()
+    angka_kontrol_dict = calculate_angka_kontrol(probs)
+    if angka_kontrol_dict:
+        st.subheader("🕵️ Angka Kontrol")
+        for label, numbers in angka_kontrol_dict.items():
+            numbers_str = " ".join(map(str, numbers))
+            st.markdown(f"#### **{label}:** `{numbers_str}`")
+        st.divider()
+
+        st.subheader("💣 Rekomendasi Pola Permainan")
+        
+        # --- Bagian 2D ---
+        bbfs_digits_2d = angka_kontrol_dict.get("Top 2D (KEP-EKO)", [])[:7]
+        if bbfs_digits_2d:
+            bbfs_str_2d = " ".join(map(str, bbfs_digits_2d))
+            st.markdown(f"##### **BBFS 7 Digit (2D):** `{bbfs_str_2d}`")
+            try:
+                angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_digits_2d)
+                angka_jadi_2d_str = " * ".join(angka_jadi_2d_list) if angka_jadi_2d_list else "-"
+                st.text_area(f"Angka Jadi 2D ({len(angka_jadi_2d_list)} Line)", value=angka_jadi_2d_str)
+            except Exception as e:
+                st.error(f"Terjadi galat saat membuat Angka Jadi 2D: {e}")
+        
+        # --- Bagian 4D ---
+        bbfs_digits_4d = angka_kontrol_dict.get("Jagoan Posisi (AS-KOP-KEP-EKO)", [])[:7]
+        if bbfs_digits_4d:
+            bbfs_str_4d = " ".join(map(str, bbfs_digits_4d))
+            st.markdown(f"##### **BBFS 7 Digit (4D):** `{bbfs_str_4d}`")
+            try:
+                angka_jadi_4d_list = generate_angka_jadi_4d(probs, bbfs_digits_4d)
+                angka_jadi_4d_str = " * ".join(angka_jadi_4d_list) if angka_jadi_4d_list else "-"
+                st.text_area(f"Angka Jadi 4D ({len(angka_jadi_4d_list)} Line)", value=angka_jadi_4d_str, height=200)
+            except Exception as e:
+                st.error(f"Terjadi galat saat membuat Angka Jadi 4D: {e}")
+        st.divider()
 
 # --- Bagian Analisis Putaran Terbaik ---
 if st.session_state.get('run_putaran_analysis', False):
     st.header("🔬 Hasil Analisis Putaran Terbaik")
-    with st.spinner("Menganalisis berbagai skenario putaran... Ini mungkin akan memakan waktu."):
-        # (Logika analisis putaran tidak diubah, tetap sama)
+    with st.spinner("Menganalisis berbagai jumlah putaran... Ini akan memakan waktu."):
         full_df = st.session_state.get('df_data', pd.DataFrame())
         putaran_results = {}
         max_putaran_test = len(full_df) - jumlah_uji
         start_putaran = 11
         end_putaran = max_putaran_test
-        
+        step_putaran = 1
+
         if end_putaran < start_putaran:
-            st.warning(f"Data tidak cukup. Butuh setidaknya {start_putaran + jumlah_uji} total data riwayat.")
+            st.warning(f"Data tidak cukup untuk pengujian. Butuh setidaknya {start_putaran + jumlah_uji} total data riwayat.")
         else:
-            test_range = list(range(start_putaran, end_putaran + 1, 1))
+            test_range = list(range(start_putaran, end_putaran + 1, step_putaran))
             progress_bar = st.progress(0, text="Memulai analisis...")
-            
             for i, p in enumerate(test_range):
                 total_benar_for_p = 0
                 total_digits_for_p = 0
@@ -277,17 +269,16 @@ if st.session_state.get('run_putaran_analysis', False):
                     end_index = len(full_df) - jumlah_uji + j
                     start_index = end_index - p
                     if start_index < 0: continue
-                    
                     train_df_for_step = full_df.iloc[start_index:end_index]
                     actual_row = full_df.iloc[end_index]
                     if len(train_df_for_step) < 11: continue
 
                     pred, _ = None, None
                     if metode == "Markov": pred, _ = predict_markov(train_df_for_step, top_n=top_n)
-                    elif metode == "Markov Order-2": pred, _ = predict_markov_order2(train_df_for_step, top_n=top_n)
-                    elif metode == "Markov Gabungan": pred, _ = predict_markov_hybrid(train_df_for_step, top_n=top_n)
+                    elif metode == "Markov Order-2": pred, _ = predict_markov_order2(df, top_n=top_n)
+                    elif metode == "Markov Gabungan": pred, _ = predict_markov_hybrid(df, top_n=top_n)
 
-                    if pred:
+                    if pred is not None:
                         actual_digits = f"{int(actual_row['angka']):04d}"
                         for k in range(4):
                             if int(actual_digits[k]) in pred[k]:
@@ -312,10 +303,15 @@ if st.session_state.get('run_putaran_analysis', False):
                 st.subheader("🏆 Rekomendasi Penggunaan Data")
                 m1, m2 = st.columns(2)
                 m1.metric("Putaran Terbaik", f"{best_putaran} Data", "Jumlah data historis")
-                m2.metric("Akurasi Tertinggi", f"{best_accuracy:.2f}%", f"Berdasarkan pengujian {jumlah_uji} data terakhir")
+                m2.metric("Akurasi Tertinggi", f"{best_accuracy:.2f}%", f"Dengan {best_putaran} data")
 
                 chart_data = pd.DataFrame.from_dict(putaran_results, orient='index', columns=['Akurasi (%)'])
                 chart_data.index.name = 'Jumlah Putaran'
                 st.line_chart(chart_data)
+
+                st.subheader(f"📜 Tabel Hasil Analisis Putaran (Rentang {start_putaran}-{end_putaran})")
+                sorted_chart_data = chart_data.sort_values(by='Akurasi (%)', ascending=False)
+                sorted_chart_data['Akurasi (%)'] = sorted_chart_data['Akurasi (%)'].map('{:.2f}%'.format)
+                st.dataframe(sorted_chart_data, use_container_width=True)
 
     st.session_state.run_putaran_analysis = False
