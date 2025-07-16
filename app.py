@@ -26,33 +26,42 @@ def init_session_state():
 
 init_session_state()
 
-# --- FUNGSI BARU UNTUK ANALISIS POLA LANJUTAN ---
-def analyze_advanced_patterns(probs, result):
+# --- FUNGSI ANALISIS POLA LANJUTAN YANG DIPERBAIKI ---
+def analyze_advanced_patterns(historical_df):
     """
-    Menganalisis angka 'off' dan pola kembar dari hasil probabilitas.
+    Menganalisis angka 'off' dan pola kembar berdasarkan frekuensi
+    pada data historis yang digunakan.
     """
-    if probs is None or not result:
+    if historical_df is None or historical_df.empty:
         return {}
 
     patterns = {}
-    # 1. Cari angka 'Off' (digit dengan probabilitas terendah)
-    patterns['as_off'] = np.argmin(probs[0])
-    patterns['kop_off'] = np.argmin(probs[1])
-    patterns['kepala_off'] = np.argmin(probs[2])
-    patterns['ekor_off'] = np.argmin(probs[3])
+    total_rows = len(historical_df)
+    data = historical_df['angka'].astype(str).str.zfill(4)
 
-    # 2. Analisis pola 'Kembar' (jika ada irisan/kesamaan digit di top result)
-    as_digits = set(result[0])
-    kop_digits = set(result[1])
-    kep_digits = set(result[2])
-    ekor_digits = set(result[3])
+    # 1. Cari angka 'Off' berdasarkan frekuensi kemunculan terendah pada data historis.
+    # Digunakan value_counts().idxmin() untuk menemukan angka yang paling jarang muncul.
+    patterns['as_off'] = data.str[0].astype(int).value_counts().idxmin()
+    patterns['kop_off'] = data.str[1].astype(int).value_counts().idxmin()
+    patterns['kepala_off'] = data.str[2].astype(int).value_counts().idxmin()
+    patterns['ekor_off'] = data.str[3].astype(int).value_counts().idxmin()
 
-    patterns['kembar_depan'] = "ON" if not as_digits.isdisjoint(kop_digits) else "OFF"
-    patterns['kembar_tengah'] = "ON" if not kop_digits.isdisjoint(kep_digits) else "OFF"
-    patterns['kembar_belakang'] = "ON" if not kep_digits.isdisjoint(ekor_digits) else "OFF"
-    patterns['kembar_as_kep'] = "ON" if not as_digits.isdisjoint(kep_digits) else "OFF"
-    patterns['kembar_as_ekor'] = "ON" if not as_digits.isdisjoint(ekor_digits) else "OFF"
-    patterns['kembar_kop_ekor'] = "ON" if not kop_digits.isdisjoint(ekor_digits) else "OFF"
+    # 2. Analisis pola 'Kembar' berdasarkan frekuensi historis.
+    # Ambang batas 10% (0.10) digunakan sebagai dasar. Jika frekuensi di atas
+    # ambang batas, dianggap ada tren (ON).
+    threshold = 0.10
+
+    def check_twin_freq(pos1, pos2):
+        count = (data.str[pos1] == data.str[pos2]).sum()
+        freq = count / total_rows if total_rows > 0 else 0
+        return "ON" if freq >= threshold else "OFF"
+
+    patterns['kembar_depan'] = check_twin_freq(0, 1)      # As == Kop
+    patterns['kembar_tengah'] = check_twin_freq(1, 2)     # Kop == Kepala
+    patterns['kembar_belakang'] = check_twin_freq(2, 3)    # Kepala == Ekor
+    patterns['kembar_as_kep'] = check_twin_freq(0, 2)       # As == Kepala
+    patterns['kembar_as_ekor'] = check_twin_freq(0, 3)      # As == Ekor
+    patterns['kembar_kop_ekor'] = check_twin_freq(1, 3)      # Kop == Ekor
 
     return patterns
 
@@ -124,14 +133,12 @@ if st.button("📈 Analisis Sekarang!", use_container_width=True):
             if result is not None:
                 st.session_state.prediction_data = {"result": result, "probs": probs}
 
-# --- BAGIAN UTAMA YANG DIUBAH UNTUK TAMPILAN 2 KOLOM ---
 if st.session_state.get('prediction_data') is not None:
     prediction_data = st.session_state.prediction_data
     result = prediction_data["result"]
     probs = prediction_data["probs"]
 
-    # Buat 2 kolom utama
-    col1, col2 = st.columns([0.55, 0.45]) # Kolom kiri sedikit lebih besar
+    col1, col2 = st.columns([0.55, 0.45])
 
     with col1:
         st.subheader(f"🎯 Hasil Analisis Top {top_n} Digit")
@@ -156,10 +163,10 @@ if st.session_state.get('prediction_data') is not None:
             with tab4d: st.text_area("Hasil 4D...", text_4d, height=150, key="txt4d"); st.download_button("Unduh 4D.txt", text_4d)
     
     with col2:
-        st.subheader("💡 Pola Lanjutan")
-        patterns = analyze_advanced_patterns(probs, result)
+        st.subheader("💡 Pola Lanjutan (Data Historis)")
+        # --- PERBAIKAN: Memanggil fungsi dengan dataframe historis (df) ---
+        patterns = analyze_advanced_patterns(df)
         if patterns:
-            # Buat 2 sub-kolom di dalam kolom kanan
             sub_col1, sub_col2 = st.columns(2)
             with sub_col1:
                 st.text_input("As Off", value=patterns.get('as_off'), disabled=True)
@@ -181,7 +188,6 @@ if st.session_state.get('prediction_data') is not None:
 
 if st.session_state.get('run_putaran_analysis', False):
     st.header("🔬 Hasil Analisis Putaran Terbaik")
-    # ... (Sisa kode untuk Analisis Putaran Terbaik tidak berubah) ...
     with st.spinner("Menganalisis berbagai jumlah putaran... Ini akan memakan waktu."):
         full_df = st.session_state.get('df_data', pd.DataFrame())
         putaran_results = {}
