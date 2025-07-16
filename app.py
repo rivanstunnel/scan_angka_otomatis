@@ -26,44 +26,93 @@ def init_session_state():
 
 init_session_state()
 
-# --- FUNGSI ANALISIS POLA LANJUTAN YANG DIPERBAIKI ---
+# --- Fungsi Bantuan ---
 def analyze_advanced_patterns(historical_df):
-    """
-    Menganalisis angka 'off' dan pola kembar berdasarkan frekuensi
-    pada data historis yang digunakan.
-    """
     if historical_df is None or historical_df.empty:
         return {}
-
     patterns = {}
     total_rows = len(historical_df)
     data = historical_df['angka'].astype(str).str.zfill(4)
-
-    # 1. Cari angka 'Off' berdasarkan frekuensi kemunculan terendah pada data historis.
-    # Digunakan value_counts().idxmin() untuk menemukan angka yang paling jarang muncul.
     patterns['as_off'] = data.str[0].astype(int).value_counts().idxmin()
     patterns['kop_off'] = data.str[1].astype(int).value_counts().idxmin()
     patterns['kepala_off'] = data.str[2].astype(int).value_counts().idxmin()
     patterns['ekor_off'] = data.str[3].astype(int).value_counts().idxmin()
-
-    # 2. Analisis pola 'Kembar' berdasarkan frekuensi historis.
-    # Ambang batas 10% (0.10) digunakan sebagai dasar. Jika frekuensi di atas
-    # ambang batas, dianggap ada tren (ON).
     threshold = 0.10
-
     def check_twin_freq(pos1, pos2):
         count = (data.str[pos1] == data.str[pos2]).sum()
         freq = count / total_rows if total_rows > 0 else 0
         return "ON" if freq >= threshold else "OFF"
-
-    patterns['kembar_depan'] = check_twin_freq(0, 1)      # As == Kop
-    patterns['kembar_tengah'] = check_twin_freq(1, 2)     # Kop == Kepala
-    patterns['kembar_belakang'] = check_twin_freq(2, 3)    # Kepala == Ekor
-    patterns['kembar_as_kep'] = check_twin_freq(0, 2)       # As == Kepala
-    patterns['kembar_as_ekor'] = check_twin_freq(0, 3)      # As == Ekor
-    patterns['kembar_kop_ekor'] = check_twin_freq(1, 3)      # Kop == Ekor
-
+    patterns['kembar_depan'] = check_twin_freq(0, 1)
+    patterns['kembar_tengah'] = check_twin_freq(1, 2)
+    patterns['kembar_belakang'] = check_twin_freq(2, 3)
+    patterns['kembar_as_kep'] = check_twin_freq(0, 2)
+    patterns['kembar_as_ekor'] = check_twin_freq(0, 3)
+    patterns['kembar_kop_ekor'] = check_twin_freq(1, 3)
     return patterns
+
+# --- FUNGSI BARU UNTUK MENGHASILKAN AI/CT 2D ---
+def generate_2d_ai_ct(historical_df):
+    """
+    Menghasilkan 5 set angka kontrol 7-digit untuk 2D Depan, Tengah, & Belakang
+    berdasarkan 5 metode analisis frekuensi data historis.
+    """
+    if historical_df is None or historical_df.empty:
+        return {}
+
+    data = historical_df['angka'].astype(str).str.zfill(4)
+    pos_as = data.str[0].astype(int)
+    pos_kop = data.str[1].astype(int)
+    pos_kep = data.str[2].astype(int)
+    pos_ekor = data.str[3].astype(int)
+
+    def get_control_sets(series1, series2):
+        all_digits = list(range(10))
+        sets = []
+        
+        # Resep 1: Frekuensi Gabungan dari 2 Posisi
+        combined_freq = pd.concat([series1, series2]).value_counts()
+        sets.append(combined_freq.nlargest(7).index.tolist())
+
+        # Resep 2: Frekuensi Dominan Posisi Pertama
+        freq1 = series1.value_counts().reindex(all_digits, fill_value=0)
+        sets.append(freq1.nlargest(7).index.tolist())
+
+        # Resep 3: Frekuensi Dominan Posisi Kedua
+        freq2 = series2.value_counts().reindex(all_digits, fill_value=0)
+        sets.append(freq2.nlargest(7).index.tolist())
+
+        # Resep 4: Gabungan Unik dari Top 4 + Top 4
+        top_s1 = freq1.nlargest(4).index
+        top_s2 = freq2.nlargest(4).index
+        unique_top = list(dict.fromkeys(top_s1.tolist() + top_s2.tolist()))
+        # Pastikan jumlahnya 7 digit
+        for d in combined_freq.nlargest(10).index:
+            if len(unique_top) >= 7: break
+            if d not in unique_top: unique_top.append(d)
+        sets.append(unique_top[:7])
+        
+        # Resep 5: Frekuensi dengan Bobot (Posisi kedua lebih penting)
+        weighted_counts = (freq2 * 1.2) + freq1
+        sets.append(weighted_counts.nlargest(7).index.tolist())
+        
+        # Pastikan semua set memiliki 7 digit untuk konsistensi tampilan
+        final_sets = []
+        for s in sets:
+            if len(s) < 7:
+                s_set = set(s)
+                for d in combined_freq.nlargest(10).index:
+                    if len(s) >= 7: break
+                    if d not in s_set: s.append(d)
+            final_sets.append(s[:7])
+
+        return final_sets
+
+    results = {
+        "depan": get_control_sets(pos_as, pos_kop),
+        "tengah": get_control_sets(pos_kop, pos_kep),
+        "belakang": get_control_sets(pos_kep, pos_ekor),
+    }
+    return results
 
 # ==============================================================================
 # --- UI (Tampilan Aplikasi) Dimulai di Sini ---
@@ -164,7 +213,6 @@ if st.session_state.get('prediction_data') is not None:
     
     with col2:
         st.subheader("💡 Pola Lanjutan (Data Historis)")
-        # --- PERBAIKAN: Memanggil fungsi dengan dataframe historis (df) ---
         patterns = analyze_advanced_patterns(df)
         if patterns:
             sub_col1, sub_col2 = st.columns(2)
@@ -183,6 +231,26 @@ if st.session_state.get('prediction_data') is not None:
                 st.text_input("Kembar As-Kepala", value=patterns.get('kembar_as_kep'), disabled=True)
                 st.text_input("Kembar As-Ekor", value=patterns.get('kembar_as_ekor'), disabled=True)
                 st.text_input("Kembar Kop-Ekor", value=patterns.get('kembar_kop_ekor'), disabled=True)
+        
+        # --- BAGIAN BARU UNTUK AI/CT 2D ---
+        st.markdown("---", help="Pemisah Bagian")
+        ai_ct_results = generate_2d_ai_ct(df)
+        if ai_ct_results:
+            ct1, ct2, ct3 = st.columns(3)
+            
+            def display_card(column, title, data_key):
+                with column:
+                    st.markdown(f'<p style="background-color:#B22222; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">{title}</p>', unsafe_allow_html=True)
+                    text_content = ""
+                    if data_key in ai_ct_results:
+                        for row in ai_ct_results[data_key]:
+                            text_content += " ".join(map(str, row)) + "\n"
+                    st.text_area(label=f"_{title}", value=text_content.strip(), height=140, disabled=True, key=f"ct_{data_key}", label_visibility="collapsed")
+
+            display_card(ct1, "AI/CT 2D Depan", "depan")
+            display_card(ct2, "AI/CT 2D Tengah", "tengah")
+            display_card(ct3, "AI/CT 2D Belakang", "belakang")
+
 
     st.divider()
 
@@ -213,12 +281,9 @@ if st.session_state.get('run_putaran_analysis', False):
                     if len(train_df_for_step) < 11: continue
 
                     pred, _ = None, None
-                    if metode == "Markov": 
-                        pred, _ = predict_markov(train_df_for_step, top_n=top_n)
-                    elif metode == "Markov Order-2": 
-                        pred, _ = predict_markov_order2(train_df_for_step, top_n=top_n)
-                    elif metode == "Markov Gabungan": 
-                        pred, _ = predict_markov_hybrid(train_df_for_step, top_n=top_n)
+                    if metode == "Markov": pred, _ = predict_markov(train_df_for_step, top_n=top_n)
+                    elif metode == "Markov Order-2": pred, _ = predict_markov_order2(train_df_for_step, top_n=top_n)
+                    elif metode == "Markov Gabungan": pred, _ = predict_markov_hybrid(train_df_for_step, top_n=top_n)
 
                     if pred is not None:
                         actual_digits = f"{int(actual_row['angka']):04d}"
