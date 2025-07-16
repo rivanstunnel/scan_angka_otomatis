@@ -5,7 +5,7 @@ import pandas as pd
 import requests
 import numpy as np
 import re
-from itertools import product, permutations
+from itertools import product
 from markov_model import (
     predict_markov,
     predict_markov_order2,
@@ -27,67 +27,7 @@ def init_session_state():
 init_session_state()
 
 # --- Fungsi Bantuan ---
-def calculate_angka_kontrol(probabilities):
-    """
-    Menghitung Angka Kontrol berdasarkan matriks probabilitas.
-    Panjang digit diatur statis ke 7.
-    """
-    if probabilities is None or probabilities.shape != (4, 10):
-        return {}
-
-    total_probs = np.sum(probabilities, axis=0)
-    probs_3d = np.sum(probabilities[1:], axis=0)
-    probs_2d = np.sum(probabilities[2:], axis=0)
-
-    ak_global = np.argsort(total_probs)[-7:][::-1].tolist()
-    top_3d = np.argsort(probs_3d)[-7:][::-1].tolist()
-    top_2d = np.argsort(probs_2d)[-7:][::-1].tolist()
-
-    jagoan_per_posisi = np.argmax(probabilities, axis=1).tolist()
-    jagoan_final = list(dict.fromkeys(jagoan_per_posisi))
-    
-    for digit in ak_global:
-        if len(jagoan_final) >= 7:
-            break
-        if digit not in jagoan_final:
-            jagoan_final.append(digit)
-            
-    if len(jagoan_final) < 7:
-        sisa_digit = [d for d in range(10) if d not in jagoan_final]
-        needed = 7 - len(jagoan_final)
-        jagoan_final.extend(sisa_digit[:needed])
-
-    lemah_global = np.argsort(total_probs)[:2].tolist()
-
-    return {
-        "Angka Kontrol (AK)": ak_global,
-        "Top 4D (AS-KOP-KEP-EKO)": jagoan_final,
-        "Top 3D (KOP-KEP-EKO)": top_3d,
-        "Top 2D (KEP-EKO)": top_2d,
-        "Angka Lemah (Hindari)": lemah_global,
-    }
-
-def generate_angka_jadi_2d(probabilities, bbfs_digits):
-    if probabilities is None or not bbfs_digits: return []
-    all_2d_lines = list(product(bbfs_digits, repeat=2))
-    scored_lines = []
-    for line in all_2d_lines:
-        kepala, ekor = int(line[0]), int(line[1])
-        score = probabilities[2][kepala] + probabilities[3][ekor]
-        scored_lines.append(("".join(map(str, line)), score))
-    sorted_lines = sorted(scored_lines, key=lambda x: x[1], reverse=True)
-    return [line[0] for line in sorted_lines]
-
-def generate_angka_jadi_4d(probabilities, bbfs_source_digits):
-    if probabilities is None or not bbfs_source_digits: return []
-    all_4d_lines = list(product(bbfs_source_digits, repeat=4))
-    scored_lines = []
-    for line in all_4d_lines:
-        a, k, p, e = map(int, line)
-        score = probabilities[0][a] + probabilities[1][k] + probabilities[2][p] + probabilities[3][e]
-        scored_lines.append(("".join(map(str, line)), score))
-    sorted_lines = sorted(scored_lines, key=lambda x: x[1], reverse=True)
-    return [line[0] for line in sorted_lines]
+# Fungsi calculate_angka_kontrol dan generate_... dihapus karena tidak lagi digunakan.
 
 # ==============================================================================
 # --- UI (Tampilan Aplikasi) Dimulai di Sini ---
@@ -181,29 +121,8 @@ if st.session_state.get('prediction_data') is not None:
         with tab3d: st.text_area("Hasil 3D...", text_3d, height=200); st.download_button("Unduh 3D.txt", text_3d)
         with tab4d: st.text_area("Hasil 4D...", text_4d, height=200); st.download_button("Unduh 4D.txt", text_4d)
     
-    angka_kontrol_dict = calculate_angka_kontrol(probs)
-    if angka_kontrol_dict:
-        st.subheader("🕵️ Angka Kontrol")
-        for label, numbers in angka_kontrol_dict.items():
-            numbers_str = " ".join(map(str, numbers))
-            st.markdown(f"#### **{label}:** `{numbers_str}`")
-        st.divider()
-        st.subheader("💣 Rekomendasi Pola Permainan")
-        bbfs_digits_2d = angka_kontrol_dict.get("Top 2D (KEP-EKO)", [])[:7]
-        if bbfs_digits_2d:
-            st.markdown(f"##### **BBFS 7 Digit (2D):** `{' '.join(map(str, bbfs_digits_2d))}`")
-            try:
-                angka_jadi_2d_list = generate_angka_jadi_2d(probs, bbfs_digits_2d)
-                st.text_area(f"Angka Jadi 2D...", " * ".join(angka_jadi_2d_list) if angka_jadi_2d_list else "-")
-            except Exception as e: st.error(f"Galat 2D: {e}")
-        bbfs_digits_4d = angka_kontrol_dict.get("Top 4D (AS-KOP-KEP-EKO)", [])[:7]
-        if bbfs_digits_4d:
-            st.markdown(f"##### **BBFS 7 Digit (4D):** `{' '.join(map(str, bbfs_digits_4d))}`")
-            try:
-                angka_jadi_4d_list = generate_angka_jadi_4d(probs, bbfs_digits_4d)
-                st.text_area(f"Angka Jadi 4D...", " * ".join(angka_jadi_4d_list) if angka_jadi_4d_list else "-", height=200)
-            except Exception as e: st.error(f"Galat 4D: {e}")
-        st.divider()
+    # --- BLOK ANGKKA KONTROL DAN REKOMENDASI POLA PERMAINAN DIHAPUS DARI SINI ---
+    st.divider()
 
 if st.session_state.get('run_putaran_analysis', False):
     st.header("🔬 Hasil Analisis Putaran Terbaik")
@@ -232,8 +151,6 @@ if st.session_state.get('run_putaran_analysis', False):
                     if len(train_df_for_step) < 11: continue
 
                     pred, _ = None, None
-                    # --- PERBAIKAN BUG DI SINI ---
-                    # Semua metode sekarang menggunakan `train_df_for_step` yang benar
                     if metode == "Markov": 
                         pred, _ = predict_markov(train_df_for_step, top_n=top_n)
                     elif metode == "Markov Order-2": 
