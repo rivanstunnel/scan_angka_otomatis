@@ -26,8 +26,35 @@ def init_session_state():
 
 init_session_state()
 
-# --- Fungsi Bantuan ---
-# Fungsi calculate_angka_kontrol dan generate_... dihapus karena tidak lagi digunakan.
+# --- FUNGSI BARU UNTUK ANALISIS POLA LANJUTAN ---
+def analyze_advanced_patterns(probs, result):
+    """
+    Menganalisis angka 'off' dan pola kembar dari hasil probabilitas.
+    """
+    if probs is None or not result:
+        return {}
+
+    patterns = {}
+    # 1. Cari angka 'Off' (digit dengan probabilitas terendah)
+    patterns['as_off'] = np.argmin(probs[0])
+    patterns['kop_off'] = np.argmin(probs[1])
+    patterns['kepala_off'] = np.argmin(probs[2])
+    patterns['ekor_off'] = np.argmin(probs[3])
+
+    # 2. Analisis pola 'Kembar' (jika ada irisan/kesamaan digit di top result)
+    as_digits = set(result[0])
+    kop_digits = set(result[1])
+    kep_digits = set(result[2])
+    ekor_digits = set(result[3])
+
+    patterns['kembar_depan'] = "ON" if not as_digits.isdisjoint(kop_digits) else "OFF"
+    patterns['kembar_tengah'] = "ON" if not kop_digits.isdisjoint(kep_digits) else "OFF"
+    patterns['kembar_belakang'] = "ON" if not kep_digits.isdisjoint(ekor_digits) else "OFF"
+    patterns['kembar_as_kep'] = "ON" if not as_digits.isdisjoint(kep_digits) else "OFF"
+    patterns['kembar_as_ekor'] = "ON" if not as_digits.isdisjoint(ekor_digits) else "OFF"
+    patterns['kembar_kop_ekor'] = "ON" if not kop_digits.isdisjoint(ekor_digits) else "OFF"
+
+    return patterns
 
 # ==============================================================================
 # --- UI (Tampilan Aplikasi) Dimulai di Sini ---
@@ -97,35 +124,64 @@ if st.button("📈 Analisis Sekarang!", use_container_width=True):
             if result is not None:
                 st.session_state.prediction_data = {"result": result, "probs": probs}
 
+# --- BAGIAN UTAMA YANG DIUBAH UNTUK TAMPILAN 2 KOLOM ---
 if st.session_state.get('prediction_data') is not None:
     prediction_data = st.session_state.prediction_data
     result = prediction_data["result"]
     probs = prediction_data["probs"]
-    st.subheader(f"🎯 Hasil Analisis Top {top_n} Digit")
-    labels = ["As", "Kop", "Kepala", "Ekor"]
-    for i, label in enumerate(labels):
-        hasil_str = ", ".join(map(str, result[i]))
-        st.markdown(f"#### **{label}:** `{hasil_str}`")
-    st.divider()
 
-    with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
-        kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
-        kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
-        kombinasi_2d_list = ["".join(map(str, p)) for p in product(*result[2:])]
-        separator = " * "
-        text_4d = separator.join(kombinasi_4d_list)
-        text_3d = separator.join(kombinasi_3d_list)
-        text_2d = separator.join(kombinasi_2d_list)
-        tab2d, tab3d, tab4d = st.tabs([f"Kombinasi 2D ({len(kombinasi_2d_list)})", f"Kombinasi 3D ({len(kombinasi_3d_list)})", f"Kombinasi 4D ({len(kombinasi_4d_list)})"])
-        with tab2d: st.text_area("Hasil 2D...", text_2d, height=200); st.download_button("Unduh 2D.txt", text_2d)
-        with tab3d: st.text_area("Hasil 3D...", text_3d, height=200); st.download_button("Unduh 3D.txt", text_3d)
-        with tab4d: st.text_area("Hasil 4D...", text_4d, height=200); st.download_button("Unduh 4D.txt", text_4d)
+    # Buat 2 kolom utama
+    col1, col2 = st.columns([0.55, 0.45]) # Kolom kiri sedikit lebih besar
+
+    with col1:
+        st.subheader(f"🎯 Hasil Analisis Top {top_n} Digit")
+        labels = ["As", "Kop", "Kepala", "Ekor"]
+        for i, label in enumerate(labels):
+            hasil_str = ", ".join(map(str, result[i]))
+            st.markdown(f"**{label}:** `{hasil_str}`")
+        
+        st.divider()
+
+        with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
+            kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
+            kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
+            kombinasi_2d_list = ["".join(map(str, p)) for p in product(*result[2:])]
+            separator = " * "
+            text_4d = separator.join(kombinasi_4d_list)
+            text_3d = separator.join(kombinasi_3d_list)
+            text_2d = separator.join(kombinasi_2d_list)
+            tab2d, tab3d, tab4d = st.tabs([f"2D ({len(kombinasi_2d_list)})", f"3D ({len(kombinasi_3d_list)})", f"4D ({len(kombinasi_4d_list)})"])
+            with tab2d: st.text_area("Hasil 2D...", text_2d, height=150, key="txt2d"); st.download_button("Unduh 2D.txt", text_2d)
+            with tab3d: st.text_area("Hasil 3D...", text_3d, height=150, key="txt3d"); st.download_button("Unduh 3D.txt", text_3d)
+            with tab4d: st.text_area("Hasil 4D...", text_4d, height=150, key="txt4d"); st.download_button("Unduh 4D.txt", text_4d)
     
-    # --- BLOK ANGKKA KONTROL DAN REKOMENDASI POLA PERMAINAN DIHAPUS DARI SINI ---
+    with col2:
+        st.subheader("💡 Pola Lanjutan")
+        patterns = analyze_advanced_patterns(probs, result)
+        if patterns:
+            # Buat 2 sub-kolom di dalam kolom kanan
+            sub_col1, sub_col2 = st.columns(2)
+            with sub_col1:
+                st.text_input("As Off", value=patterns.get('as_off'), disabled=True)
+                st.text_input("Kepala Off", value=patterns.get('kepala_off'), disabled=True)
+                st.markdown("---")
+                st.text_input("Kembar Depan", value=patterns.get('kembar_depan'), disabled=True)
+                st.text_input("Kembar Tengah", value=patterns.get('kembar_tengah'), disabled=True)
+                st.text_input("Kembar Belakang", value=patterns.get('kembar_belakang'), disabled=True)
+
+            with sub_col2:
+                st.text_input("Kop Off", value=patterns.get('kop_off'), disabled=True)
+                st.text_input("Ekor Off", value=patterns.get('ekor_off'), disabled=True)
+                st.markdown("---")
+                st.text_input("Kembar As-Kepala", value=patterns.get('kembar_as_kep'), disabled=True)
+                st.text_input("Kembar As-Ekor", value=patterns.get('kembar_as_ekor'), disabled=True)
+                st.text_input("Kembar Kop-Ekor", value=patterns.get('kembar_kop_ekor'), disabled=True)
+
     st.divider()
 
 if st.session_state.get('run_putaran_analysis', False):
     st.header("🔬 Hasil Analisis Putaran Terbaik")
+    # ... (Sisa kode untuk Analisis Putaran Terbaik tidak berubah) ...
     with st.spinner("Menganalisis berbagai jumlah putaran... Ini akan memakan waktu."):
         full_df = st.session_state.get('df_data', pd.DataFrame())
         putaran_results = {}
