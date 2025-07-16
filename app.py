@@ -64,7 +64,8 @@ def calculate_angka_kontrol(probabilities):
     return {
         "Angka Kontrol (AK)": ak_global,
         "Top 2D (KEP-EKO)": top_2d,
-        "Jagoan Posisi (AS-KOP-KEP-EKO)": jagoan_final,
+        # DIUBAH DI SINI
+        "Top 4D (AS-KOP-KEP-EKO)": jagoan_final,
         "Angka Lemah (Hindari)": lemah_global,
     }
 
@@ -234,7 +235,8 @@ if st.session_state.get('prediction_data') is not None:
                 st.error(f"Terjadi galat saat membuat Angka Jadi 2D: {e}")
         
         # --- Bagian 4D ---
-        bbfs_digits_4d = angka_kontrol_dict.get("Jagoan Posisi (AS-KOP-KEP-EKO)", [])[:7]
+        # DIUBAH DI SINI
+        bbfs_digits_4d = angka_kontrol_dict.get("Top 4D (AS-KOP-KEP-EKO)", [])[:7]
         if bbfs_digits_4d:
             bbfs_str_4d = " ".join(map(str, bbfs_digits_4d))
             st.markdown(f"##### **BBFS 7 Digit (4D):** `{bbfs_str_4d}`")
