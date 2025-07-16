@@ -218,13 +218,11 @@ if st.session_state.get('prediction_data') is not None:
     result = prediction_data["result"]
     probs = prediction_data["probs"]
 
-    # --- PERUBAHAN TATA LETAK: Menggunakan satu kolom utama ---
     st.subheader(f"🎯 Hasil Analisis Top {top_n} Digit")
     labels = ["As", "Kop", "Kepala", "Ekor"]
-    # Tampilkan hasil top digit dalam 2 kolom agar rapi
-    top_cols = st.columns(2)
+    top_cols = st.columns(4)
     for i, label in enumerate(labels):
-        with top_cols[i % 2]:
+        with top_cols[i]:
             hasil_str = ", ".join(map(str, result[i]))
             st.markdown(f"**{label}:** `{hasil_str}`")
     
@@ -241,39 +239,44 @@ if st.session_state.get('prediction_data') is not None:
 
     st.divider()
 
-    # --- Pola Lanjutan dipindahkan ke sini ---
-    st.subheader("💡 Pola Lanjutan (Data Historis)")
-    patterns = analyze_advanced_patterns(df)
-    if patterns:
-        sub_col1, sub_col2 = st.columns(2)
-        with sub_col1:
+    # --- PERUBAHAN TATA LETAK ---
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("💡 Pola Lanjutan (Data Historis)")
+        patterns = analyze_advanced_patterns(df)
+        if patterns:
+            # Bagian Angka Off
             st.text_input("As Off", value=patterns.get('as_off'), disabled=True, key="as_off")
-            st.text_input("Kepala Off", value=patterns.get('kepala_off'), disabled=True, key="kep_off")
-            st.text_input("Kembar Depan", value=patterns.get('kembar_depan'), disabled=True, key="kd")
-            st.text_input("Kembar Tengah", value=patterns.get('kembar_tengah'), disabled=True, key="kt")
-            st.text_input("Kembar Belakang", value=patterns.get('kembar_belakang'), disabled=True, key="kb")
-        with sub_col2:
             st.text_input("Kop Off", value=patterns.get('kop_off'), disabled=True, key="kop_off")
+            st.text_input("Kepala Off", value=patterns.get('kepala_off'), disabled=True, key="kep_off")
             st.text_input("Ekor Off", value=patterns.get('ekor_off'), disabled=True, key="ekor_off")
-            st.text_input("Kembar As-Kepala", value=patterns.get('kembar_as_kep'), disabled=True, key="kak")
-            st.text_input("Kembar As-Ekor", value=patterns.get('kembar_as_ekor'), disabled=True, key="kae")
-            st.text_input("Kembar Kop-Ekor", value=patterns.get('kembar_kop_ekor'), disabled=True, key="kke")
-    
-    st.divider()
-    
-    # --- AI/CT Berdasarkan Histori dipindahkan ke sini ---
-    st.subheader("AI/CT Berdasarkan Histori")
-    ai_ct_results = generate_ai_ct_patterns(df)
-    if ai_ct_results:
-        ct1, ct2, ct3 = st.columns(3)
-        def display_card(column, title, data_key, main_data):
-            with column:
-                st.markdown(f'<p style="background-color:#B22222; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">{title}</p>', unsafe_allow_html=True)
-                text_content = "\n".join(["".join(map(str, row)) for row in main_data.get(data_key, [])])
-                st.text_area(label=f"_{title}", value=text_content, height=140, key=f"ct_{data_key}", label_visibility="collapsed")
-        display_card(ct1, "AI/CT 2D Depan", "2d_depan", ai_ct_results)
-        display_card(ct2, "AI/CT 2D Tengah", "2d_tengah", ai_ct_results)
-        display_card(ct3, "AI/CT 2D Belakang", "2d_belakang", ai_ct_results)
+            
+            st.markdown("---")
+            
+            # Bagian Pola Kembar dalam 2 kolom
+            kembar_col1, kembar_col2 = st.columns(2)
+            with kembar_col1:
+                st.text_input("Kembar Depan", value=patterns.get('kembar_depan'), disabled=True, key="kd")
+                st.text_input("Kembar Tengah", value=patterns.get('kembar_tengah'), disabled=True, key="kt")
+                st.text_input("Kembar Belakang", value=patterns.get('kembar_belakang'), disabled=True, key="kb")
+            with kembar_col2:
+                st.text_input("Kembar As-Kepala", value=patterns.get('kembar_as_kep'), disabled=True, key="kak")
+                st.text_input("Kembar As-Ekor", value=patterns.get('kembar_as_ekor'), disabled=True, key="kae")
+                st.text_input("Kembar Kop-Ekor", value=patterns.get('kembar_kop_ekor'), disabled=True, key="kke")
+
+    with col2:
+        st.subheader("AI/CT Berdasarkan Histori")
+        ai_ct_results = generate_ai_ct_patterns(df)
+        if ai_ct_results:
+            ct1, ct2, ct3 = st.columns(3)
+            def display_card(column, title, data_key, main_data):
+                with column:
+                    st.markdown(f'<p style="background-color:#B22222; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">{title}</p>', unsafe_allow_html=True)
+                    text_content = "\n".join(["".join(map(str, row)) for row in main_data.get(data_key, [])])
+                    st.text_area(label=f"_{title}", value=text_content, height=140, key=f"ct_{data_key}", label_visibility="collapsed")
+            display_card(ct1, "AI/CT 2D Depan", "2d_depan", ai_ct_results)
+            display_card(ct2, "AI/CT 2D Tengah", "2d_tengah", ai_ct_results)
+            display_card(ct3, "AI/CT 2D Belakang", "2d_belakang", ai_ct_results)
 
     st.divider()
     st.subheader("Pola 4D Lengkap (Berdasarkan Prediksi)")
