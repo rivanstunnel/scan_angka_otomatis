@@ -6,6 +6,8 @@ import requests
 import numpy as np
 import re
 from itertools import product
+
+# Impor dari file model Anda
 from markov_model import (
     predict_markov,
     predict_markov_order2,
@@ -50,78 +52,95 @@ def analyze_advanced_patterns(historical_df):
     patterns['kembar_kop_ekor'] = check_twin_freq(1, 3)
     return patterns
 
-def generate_2d_ai_ct(historical_df):
-    if historical_df is None or historical_df.empty:
-        return {}
+def get_control_sets_from_series(series_list):
+    all_digits, sets = list(range(10)), []
+    
+    # Gabungkan semua series untuk frekuensi total
+    combined_series = pd.concat(series_list)
+    combined_freq = combined_series.value_counts()
+    
+    # Buat frekuensi untuk setiap series individu
+    freqs = [s.value_counts().reindex(all_digits, fill_value=0) for s in series_list]
+
+    # Resep 1: Frekuensi Gabungan
+    sets.append(combined_freq.nlargest(7).index.tolist())
+    
+    # Resep 2 & 3: Frekuensi dari 2 posisi pertama
+    if len(freqs) > 1:
+        sets.append(freqs[0].nlargest(7).index.tolist())
+        sets.append(freqs[1].nlargest(7).index.tolist())
+
+    # Resep 4: Gabungan Unik Top
+    unique_top = list(dict.fromkeys(freqs[0].nlargest(4).index.tolist() + freqs[1].nlargest(4).index.tolist()))
+    for d in combined_freq.nlargest(10).index:
+        if len(unique_top) >= 7: break
+        if d not in unique_top: unique_top.append(d)
+    sets.append(unique_top[:7])
+    
+    # Resep 5: Frekuensi dengan Bobot
+    weighted_counts = sum(freq * (1 + i*0.1) for i, freq in enumerate(freqs))
+    sets.append(weighted_counts.nlargest(7).index.tolist())
+
+    # Pastikan semua set memiliki 7 digit
+    final_sets = []
+    for s in sets:
+        if len(s) < 7:
+            s_set = set(s)
+            for d in combined_freq.nlargest(10).index:
+                if len(s) >= 7: break
+                if d not in s_set: s.append(d)
+        final_sets.append(s[:7])
+
+    while len(final_sets) < 5:
+        final_sets.append(final_sets[0])
+
+    return final_sets[:5]
+
+def generate_ai_ct_patterns(historical_df):
+    if historical_df is None or historical_df.empty: return {}
     data = historical_df['angka'].astype(str).str.zfill(4)
-    pos_as, pos_kop, pos_kep, pos_ekor = data.str[0].astype(int), data.str[1].astype(int), data.str[2].astype(int), data.str[3].astype(int)
-    def get_control_sets(series1, series2):
-        all_digits, sets = list(range(10)), []
-        combined_freq = pd.concat([series1, series2]).value_counts()
-        sets.append(combined_freq.nlargest(7).index.tolist())
-        freq1 = series1.value_counts().reindex(all_digits, fill_value=0)
-        sets.append(freq1.nlargest(7).index.tolist())
-        freq2 = series2.value_counts().reindex(all_digits, fill_value=0)
-        sets.append(freq2.nlargest(7).index.tolist())
-        top_s1, top_s2 = freq1.nlargest(4).index, freq2.nlargest(4).index
-        unique_top = list(dict.fromkeys(top_s1.tolist() + top_s2.tolist()))
-        for d in combined_freq.nlargest(10).index:
-            if len(unique_top) >= 7: break
-            if d not in unique_top: unique_top.append(d)
-        sets.append(unique_top[:7])
-        weighted_counts = (freq2 * 1.2) + freq1
-        sets.append(weighted_counts.nlargest(7).index.tolist())
-        final_sets = []
-        for s in sets:
-            if len(s) < 7:
-                s_set = set(s)
-                for d in combined_freq.nlargest(10).index:
-                    if len(s) >= 7: break
-                    if d not in s_set: s.append(d)
-            final_sets.append(s[:7])
-        return final_sets
-    return {"depan": get_control_sets(pos_as, pos_kop), "tengah": get_control_sets(pos_kop, pos_kep), "belakang": get_control_sets(pos_kep, pos_ekor)}
+    pos = [data.str[i].astype(int) for i in range(4)]
+    return {
+        "2d_depan": get_control_sets_from_series(pos[:2]),
+        "2d_tengah": get_control_sets_from_series(pos[1:3]),
+        "2d_belakang": get_control_sets_from_series(pos[2:]),
+        "4d": get_control_sets_from_series(pos),
+    }
 
-# --- FUNGSI BARU UNTUK MENGHASILKAN POLA 4D ---
-def generate_4d_patterns(result):
-    """
-    Menghasilkan AI/CT 4D, 4D ON, dan 4D OFF dari hasil prediksi.
-    """
-    if not result:
-        return {}
-
-    # 1. Buat AI/CT 4D (7 digit) dari digit-digit terkuat
-    top_digits = []
-    for i in range(4):
-        top_digits.extend(result[i][:2])  # Ambil 2 teratas dari setiap posisi
+def generate_on_off_patterns(result, probs):
+    if not result: return {}
     
-    ai_ct_4d = list(dict.fromkeys(top_digits)) # Ambil digit unik
-    
-    # Tambal hingga 7 digit jika kurang, menggunakan sisa prediksi
+    # 1. Tentukan 9 digit terkuat untuk 4D ON
     all_predicted_digits = [d for sublist in result for d in sublist]
-    for digit in all_predicted_digits:
-        if len(ai_ct_4d) >= 7: break
-        if digit not in ai_ct_4d: ai_ct_4d.append(digit)
-    ai_ct_4d = ai_ct_4d[:7]
+    on_digits_9 = list(dict.fromkeys(all_predicted_digits))[:9]
+    if len(on_digits_9) < 9: # Jika kurang dari 9, tambal dengan angka lain
+        sisa = [d for d in range(10) if d not in on_digits_9]
+        on_digits_9.extend(sisa[:9-len(on_digits_9)])
 
-    # 2. Hasilkan 4D ON dari kombinasi AI/CT 4D
-    on_4d = ["".join(map(str, p)) for p in product(ai_ct_4d, repeat=4)]
+    # 2. Hasilkan semua kombinasi dari 9 digit, skor, dan ambil 5000 teratas
+    all_on_combos = list(product(on_digits_9, repeat=4))
+    scored_combos = []
+    for p in all_on_combos:
+        score = probs[0][p[0]] + probs[1][p[1]] + probs[2][p[2]] + probs[3][p[3]]
+        scored_combos.append(("".join(map(str, p)), score))
+    
+    scored_combos.sort(key=lambda x: x[1], reverse=True)
+    on_4d_5000 = [combo[0] for combo in scored_combos[:5000]]
 
-    # 3. Hasilkan 4D OFF dari digit terlemah (yang tidak ada di AI/CT 4D)
-    off_digits = [d for d in range(10) if d not in ai_ct_4d]
-    off_4d = ["".join(map(str, p)) for p in product(off_digits, repeat=4)] if off_digits else []
+    # 3. Tentukan digit OFF (yang tidak ada di 9 digit ON)
+    off_digit = [d for d in range(10) if d not in on_digits_9]
 
-    return {'ai_ct': ai_ct_4d, 'on': on_4d, 'off': off_4d}
-
+    return {'on': on_4d_5000, 'off_digit': off_digit[0] if off_digit else '-'}
 
 # ==============================================================================
-# --- UI (Tampilan Aplikasi) Dimulai di Sini ---
+# --- UI (Tampilan Aplikasi) ---
 # ==============================================================================
 
 st.title("📊 Analisis Prediksi 4D")
 metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
 
 with st.sidebar:
+    # ... (kode sidebar tidak berubah) ...
     st.header("⚙️ Pengaturan")
     data_source = st.radio("Sumber Data", ("API", "Input Manual"), horizontal=True, key='data_source_selector')
     if data_source == "API":
@@ -152,7 +171,7 @@ with st.sidebar:
     st.divider()
     putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", 1, 1000, 100)
     metode = st.selectbox("🧠 Metode Analisis", metode_list)
-    top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 7)
+    top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 9, help="Gunakan 9 untuk hasil 4D ON/OFF terbaik")
     st.divider()
     st.header("🔬 Analisis Lanjutan")
     jumlah_uji = st.number_input("📊 Jml Data untuk Back-testing", 1, 200, 10, help="...")
@@ -163,6 +182,7 @@ with st.sidebar:
         else:
             st.session_state.run_putaran_analysis = True
             st.session_state.prediction_data = None
+
 
 df = st.session_state.get('df_data', pd.DataFrame()).tail(putaran)
 if not df.empty:
@@ -196,8 +216,7 @@ if st.session_state.get('prediction_data') is not None:
             st.markdown(f"**{label}:** `{hasil_str}`")
         st.divider()
         with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
-            # ... (kode expander tidak berubah) ...
-            pass
+            pass # Kode expander tidak berubah
     
     with col2:
         st.subheader("💡 Pola Lanjutan (Data Historis)")
@@ -219,39 +238,48 @@ if st.session_state.get('prediction_data') is not None:
                 st.text_input("Kembar As-Ekor", value=patterns.get('kembar_as_ekor'), disabled=True, key="kae")
                 st.text_input("Kembar Kop-Ekor", value=patterns.get('kembar_kop_ekor'), disabled=True, key="kke")
         
-        st.markdown("---", help="Pemisah Bagian")
-        ai_ct_results = generate_2d_ai_ct(df)
+        st.markdown("---")
+        st.subheader("AI/CT Berdasarkan Histori")
+        ai_ct_results = generate_ai_ct_patterns(df)
         if ai_ct_results:
             ct1, ct2, ct3 = st.columns(3)
-            def display_card(column, title, data_key):
+            def display_card(column, title, data_key, main_data):
                 with column:
                     st.markdown(f'<p style="background-color:#B22222; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">{title}</p>', unsafe_allow_html=True)
-                    text_content = "\n".join(["".join(map(str, row)) for row in ai_ct_results.get(data_key, [])])
+                    text_content = "\n".join(["".join(map(str, row)) for row in main_data.get(data_key, [])])
                     st.text_area(label=f"_{title}", value=text_content, height=140, key=f"ct_{data_key}", label_visibility="collapsed")
-            display_card(ct1, "AI/CT 2D Depan", "depan")
-            display_card(ct2, "AI/CT 2D Tengah", "tengah")
-            display_card(ct3, "AI/CT 2D Belakang", "belakang")
-        
-        # --- BAGIAN BARU UNTUK POLA 4D ---
-        st.markdown("---")
-        st.subheader("Pola 4D (Berdasarkan Prediksi)")
-        patterns_4d = generate_4d_patterns(result)
-        if patterns_4d:
-            p4d_c1, p4d_c2, p4d_c3 = st.columns(3)
-            
-            def display_4d_card(column, title, color, data, key):
-                with column:
-                    st.markdown(f'<p style="background-color:{color}; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">{title}</p>', unsafe_allow_html=True)
-                    text_content = " ".join(map(str, data))
-                    st.text_area(f"_{title}", value=text_content, height=150, key=key, label_visibility="collapsed")
-
-            display_4d_card(p4d_c1, "AI/CT 4D", "#4682B4", patterns_4d['ai_ct'], "ai_ct_4d")
-            display_4d_card(p4d_c2, "4D ON", "#2E8B57", patterns_4d['on'], "4d_on")
-            display_4d_card(p4d_c3, "4D OFF", "#B22222", patterns_4d['off'], "4d_off")
+            display_card(ct1, "AI/CT 2D Depan", "2d_depan", ai_ct_results)
+            display_card(ct2, "AI/CT 2D Tengah", "2d_tengah", ai_ct_results)
+            display_card(ct3, "AI/CT 2D Belakang", "2d_belakang", ai_ct_results)
 
     st.divider()
+    st.subheader("Pola 4D Lengkap (Berdasarkan Prediksi)")
+    
+    col4d_1, col4d_2, col4d_3 = st.columns(3)
+    with col4d_1:
+        st.markdown(f'<p style="background-color:#4682B4; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">AI/CT 4D</p>', unsafe_allow_html=True)
+        if ai_ct_results:
+            text_content_4d = "\n".join(["".join(map(str, row)) for row in ai_ct_results.get("4d", [])])
+            st.text_area(label="_ai_ct_4d", value=text_content_4d, height=180, key="ai_ct_4d", label_visibility="collapsed")
+
+    patterns_on_off = generate_on_off_patterns(result, probs)
+    with col4d_2:
+        st.markdown(f'<p style="background-color:#2E8B57; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">4D ON</p>', unsafe_allow_html=True)
+        if patterns_on_off:
+            on_list = patterns_on_off['on']
+            st.info(f"Menampilkan 200 dari {len(on_list)} kombinasi.")
+            display_text = " ".join(on_list[:200])
+            st.text_area("_4d_on_display", value=display_text, height=100, key="4d_on_display")
+            full_on_text = "\n".join(on_list)
+            st.download_button("Unduh Semua 4D ON", data=full_on_text, file_name="4d_on.txt", use_container_width=True)
+    
+    with col4d_3:
+        st.markdown(f'<p style="background-color:#B22222; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">4D OFF</p>', unsafe_allow_html=True)
+        if patterns_on_off:
+            off_digit = patterns_on_off['off_digit']
+            st.markdown(f"<div style='padding:10px;'><b>Angka Mati Total:</b><h1 style='text-align: center; color: #B22222;'>{off_digit}</h1></div>", unsafe_allow_html=True)
+            st.info("Semua kombinasi yang mengandung angka ini dianggap lemah.")
 
 # ... (Sisa kode untuk Analisis Putaran Terbaik tidak berubah) ...
 if st.session_state.get('run_putaran_analysis', False):
-    #...
     pass
