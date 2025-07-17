@@ -146,19 +146,26 @@ metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
 
 with st.sidebar:
     st.header("⚙️ Pengaturan")
+    
+    # === PERUBAIKAN 1: Pindahkan input 'putaran' ke sini ===
+    putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", min_value=11, max_value=1000, value=100, help="Jumlah data yang akan dimuat dari API dan digunakan untuk analisis.")
+
     data_source = st.radio("Sumber Data", ("API", "Input Manual"), horizontal=True, key='data_source_selector')
+    
     def load_data(df_new):
         st.session_state.df_data = df_new
         st.session_state.prediction_data = None
         st.session_state.putaran_results = None
+        
     if data_source == "API":
         hari_list = ["harian", "kemarin", "2hari", "3hari", "4hari", "5hari"]
         selected_lokasi = st.selectbox("🌍 Pilih Pasaran", lokasi_list, key="sb_lokasi")
         selected_hari = st.selectbox("📅 Pilih Hari", hari_list, key="sb_hari")
         if st.button("Muat Data API", key="btn_muat_api"):
-            with st.spinner(f"🔄 Mengambil data untuk {selected_lokasi}..."):
+            with st.spinner(f"🔄 Mengambil {putaran} data untuk {selected_lokasi}..."):
                 try:
-                    url = f"https://wysiwygscan.com/api?pasaran={selected_lokasi.lower()}&hari={selected_hari}&putaran=1000&format=json&urut=asc"
+                    # === PERUBAIKAN 2: Gunakan variabel 'putaran' di URL ===
+                    url = f"https://wysiwygscan.com/api?pasaran={selected_lokasi.lower()}&hari={selected_hari}&putaran={putaran}&format=json&urut=asc"
                     headers = {"Authorization": "Bearer 6705327a2c9a9135f2c8fbad19f09b46"}
                     response = requests.get(url, headers=headers, timeout=20)
                     response.raise_for_status()
@@ -177,8 +184,8 @@ with st.sidebar:
             angka_list = re.findall(r'\b\d{4}\b', manual_data_input)
             load_data(pd.DataFrame({"angka": angka_list}))
             st.success(f"Berhasil memproses {len(angka_list)} data.")
+            
     st.divider()
-    putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", 1, 1000, 100)
     metode = st.selectbox("🧠 Metode Analisis", metode_list)
     top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 9, help="Gunakan 9 untuk hasil 4D ON/OFF terbaik")
     st.divider()
