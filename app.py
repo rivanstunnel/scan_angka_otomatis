@@ -226,11 +226,12 @@ if st.session_state.get('prediction_data') is not None:
     st.subheader(f"🎯 Hasil Analisis Top {top_n} Digit")
     labels = ["As", "Kop", "Kepala", "Ekor"]
 
-    # --- TAMPILAN BARU: Vertikal Penuh Sederhana ---
-    # Menggunakan st.text_input yang dinonaktifkan untuk tampilan yang bersih dan terkotak
+    # --- TAMPILAN BARU: Vertikal dan Dapat Disalin ---
+    # Menggunakan st.code agar mudah disalin
     for i, label in enumerate(labels):
         hasil_str = ", ".join(map(str, result[i]))
-        st.text_input(label=label, value=hasil_str, disabled=True, key=f"hasil_{label.lower()}")
+        st.markdown(f"**{label}**")
+        st.code(hasil_str, language=None)
     
     with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
         kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
