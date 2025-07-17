@@ -51,33 +51,54 @@ def analyze_advanced_patterns(historical_df):
     patterns['kembar_kop_ekor'] = check_twin_freq(1, 3)
     return patterns
 
+# ==== PERUBAHAN: Memastikan hasil AI/CT unik ====
 def get_control_sets_from_series(series_list):
-    all_digits, sets = list(range(10)), []
+    """Menghasilkan set angka kontrol (AI/CT) yang unik."""
+    all_digits = list(range(10))
+    sets = []
+    
     combined_series = pd.concat(series_list)
     combined_freq = combined_series.value_counts()
-    freqs = [s.value_counts().reindex(all_digits, fill_value=0) for s in series_list]
+    
+    # Metode 1: Frekuensi gabungan
     sets.append(combined_freq.nlargest(7).index.tolist())
+    
+    freqs = [s.value_counts().reindex(all_digits, fill_value=0) for s in series_list]
+    
+    # Metode 2 & 3: Frekuensi per posisi (jika ada lebih dari 1)
     if len(freqs) > 1:
         sets.append(freqs[0].nlargest(7).index.tolist())
         sets.append(freqs[1].nlargest(7).index.tolist())
+        
+    # Metode 4: Gabungan unik dari top 4 setiap posisi
     unique_top = list(dict.fromkeys(freqs[0].nlargest(4).index.tolist() + freqs[1].nlargest(4).index.tolist()))
     for d in combined_freq.nlargest(10).index:
         if len(unique_top) >= 7: break
         if d not in unique_top: unique_top.append(d)
     sets.append(unique_top[:7])
-    weighted_counts = sum(freq * (1 + i*0.1) for i, freq in enumerate(freqs))
+    
+    # Metode 5: Frekuensi dengan pembobotan
+    weighted_counts = sum(freq * (1 + i * 0.1) for i, freq in enumerate(freqs))
     sets.append(weighted_counts.nlargest(7).index.tolist())
-    final_sets = []
+    
+    # Proses untuk memastikan panjang 7 dan membuat unik
+    processed_sets = []
     for s in sets:
-        if len(s) < 7:
-            s_set = set(s)
+        current_set = list(s)
+        # Pastikan panjang setiap set adalah 7
+        if len(current_set) < 7:
+            s_set = set(current_set)
             for d in combined_freq.nlargest(10).index:
-                if len(s) >= 7: break
-                if d not in s_set: s.append(d)
-        final_sets.append(s[:7])
-    while len(final_sets) < 5:
-        final_sets.append(final_sets[0])
-    return final_sets[:5]
+                if len(current_set) >= 7: break
+                if d not in s_set:
+                    current_set.append(d)
+        processed_sets.append(current_set[:7])
+        
+    # Gunakan set dari tuple yang diurutkan untuk menghilangkan duplikat
+    unique_sets_tuples = set(tuple(sorted(s)) for s in processed_sets)
+    unique_final_sets = [list(t) for t in unique_sets_tuples]
+    
+    return unique_final_sets[:5] # Kembalikan hingga 5 set unik
 
 def generate_ai_ct_patterns(historical_df):
     if historical_df is None or historical_df.empty: return {}
@@ -184,7 +205,7 @@ with st.sidebar:
             st.success(f"Berhasil memproses {len(angka_list)} data.")
             
     st.divider()
-    metode = st.selectbox("🧠 Metode Analisis", metode_list)
+    metode = st.selectbox("🧠 Metode Analisis", metode_list, index=2)
     top_n = st.number_input("🔢 Jumlah Top Digit", 1, 9, 9, help="Gunakan 9 untuk hasil 4D ON/OFF terbaik")
     st.divider()
     st.header("🔬 Analisis Lanjutan")
