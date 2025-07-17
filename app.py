@@ -15,7 +15,7 @@ from markov_model import (
 )
 from lokasi_list import lokasi_list
 
-st.set_page_config(page_title="Scanangka otomatis 2D-3D-4D", layout="wide")
+st.set_page_config(page_title="🔮 Scan Angka otomatis 2D-3D-4D", layout="wide")
 
 # --- Inisialisasi State Aplikasi ---
 def init_session_state():
@@ -141,7 +141,7 @@ def run_backtesting_analysis(full_df, metode, top_n, jumlah_uji):
 # --- UI (Tampilan Aplikasi) ---
 # ==============================================================================
 
-st.title("Scanangka otomatis 2D-3D-4D")
+st.title("🔮 Scan Angka otomatis 2D-3D-4D")
 metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
 
 with st.sidebar:
