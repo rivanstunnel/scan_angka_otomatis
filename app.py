@@ -226,25 +226,11 @@ if st.session_state.get('prediction_data') is not None:
     st.subheader(f"🎯 Hasil Analisis Top {top_n} Digit")
     labels = ["As", "Kop", "Kepala", "Ekor"]
 
-    # --- TAMPILAN BARU: Vertikal 2x2 Grid ---
-    col1, col2 = st.columns(2)
-    with col1:
-        hasil_as = ", ".join(map(str, result[0]))
-        st.markdown(f"**{labels[0]}:**")
-        st.info(hasil_as)
-        
-        hasil_kepala = ", ".join(map(str, result[2]))
-        st.markdown(f"**{labels[2]}:**")
-        st.info(hasil_kepala)
-
-    with col2:
-        hasil_kop = ", ".join(map(str, result[1]))
-        st.markdown(f"**{labels[1]}:**")
-        st.info(hasil_kop)
-        
-        hasil_ekor = ", ".join(map(str, result[3]))
-        st.markdown(f"**{labels[3]}:**")
-        st.info(hasil_ekor)
+    # --- TAMPILAN BARU: Vertikal Penuh Sederhana ---
+    # Menggunakan st.text_input yang dinonaktifkan untuk tampilan yang bersih dan terkotak
+    for i, label in enumerate(labels):
+        hasil_str = ", ".join(map(str, result[i]))
+        st.text_input(label=label, value=hasil_str, disabled=True, key=f"hasil_{label.lower()}")
     
     with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
         kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
