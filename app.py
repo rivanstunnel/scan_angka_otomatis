@@ -147,7 +147,6 @@ metode_list = ["Markov", "Markov Order-2", "Markov Gabungan"]
 with st.sidebar:
     st.header("⚙️ Pengaturan")
     
-    # === PERUBAIKAN 1: Pindahkan input 'putaran' ke sini ===
     putaran = st.number_input("🔁 Jumlah Data Terakhir Digunakan", min_value=11, max_value=1000, value=100, help="Jumlah data yang akan dimuat dari API dan digunakan untuk analisis.")
 
     data_source = st.radio("Sumber Data", ("API", "Input Manual"), horizontal=True, key='data_source_selector')
@@ -164,7 +163,6 @@ with st.sidebar:
         if st.button("Muat Data API", key="btn_muat_api"):
             with st.spinner(f"🔄 Mengambil {putaran} data untuk {selected_lokasi}..."):
                 try:
-                    # === PERUBAIKAN 2: Gunakan variabel 'putaran' di URL ===
                     url = f"https://wysiwygscan.com/api?pasaran={selected_lokasi.lower()}&hari={selected_hari}&putaran={putaran}&format=json&urut=asc"
                     headers = {"Authorization": "Bearer 6705327a2c9a9135f2c8fbad19f09b46"}
                     response = requests.get(url, headers=headers, timeout=20)
@@ -227,11 +225,26 @@ if st.session_state.get('prediction_data') is not None:
 
     st.subheader(f"🎯 Hasil Analisis Top {top_n} Digit")
     labels = ["As", "Kop", "Kepala", "Ekor"]
-    top_cols = st.columns(4)
-    for i, label in enumerate(labels):
-        with top_cols[i]:
-            hasil_str = ", ".join(map(str, result[i]))
-            st.markdown(f"**{label}:** `{hasil_str}`")
+
+    # --- TAMPILAN BARU: Vertikal 2x2 Grid ---
+    col1, col2 = st.columns(2)
+    with col1:
+        hasil_as = ", ".join(map(str, result[0]))
+        st.markdown(f"**{labels[0]}:**")
+        st.info(hasil_as)
+        
+        hasil_kepala = ", ".join(map(str, result[2]))
+        st.markdown(f"**{labels[2]}:**")
+        st.info(hasil_kepala)
+
+    with col2:
+        hasil_kop = ", ".join(map(str, result[1]))
+        st.markdown(f"**{labels[1]}:**")
+        st.info(hasil_kop)
+        
+        hasil_ekor = ", ".join(map(str, result[3]))
+        st.markdown(f"**{labels[3]}:**")
+        st.info(hasil_ekor)
     
     with st.expander("⬇️ Tampilkan & Unduh Hasil Kombinasi"):
         kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
@@ -246,13 +259,11 @@ if st.session_state.get('prediction_data') is not None:
 
     st.divider()
 
-    # --- PERUBAHAN TATA LETAK ---
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("💡 Pola Lanjutan (Data Historis)")
         patterns = analyze_advanced_patterns(df)
         if patterns:
-            # Bagian Angka Off
             st.text_input("As Off", value=patterns.get('as_off'), disabled=True, key="as_off")
             st.text_input("Kop Off", value=patterns.get('kop_off'), disabled=True, key="kop_off")
             st.text_input("Kepala Off", value=patterns.get('kepala_off'), disabled=True, key="kep_off")
@@ -260,7 +271,6 @@ if st.session_state.get('prediction_data') is not None:
             
             st.markdown("---")
             
-            # Bagian Pola Kembar dalam 2 kolom
             kembar_col1, kembar_col2 = st.columns(2)
             with kembar_col1:
                 st.text_input("Kembar Depan", value=patterns.get('kembar_depan'), disabled=True, key="kd")
