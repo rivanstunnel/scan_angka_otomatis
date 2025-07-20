@@ -38,6 +38,13 @@ def analyze_advanced_patterns(historical_df):
     patterns['kop_off'] = data.str[1].astype(int).value_counts().idxmin()
     patterns['kepala_off'] = data.str[2].astype(int).value_counts().idxmin()
     patterns['ekor_off'] = data.str[3].astype(int).value_counts().idxmin()
+    
+    # === PENAMBAHAN: Menghitung SUM OFF 4D ===
+    sum_of_digits = data.apply(lambda x: sum(int(d) for d in str(x)))
+    sum_counts = sum_of_digits.value_counts()
+    patterns['sum_off_4d'] = sum_counts.nsmallest(10).index.tolist()
+    # === SELESAI PENAMBAHAN ===
+
     threshold = 0.10
     def check_twin_freq(pos1, pos2):
         count = (data.str[pos1] == data.str[pos2]).sum()
@@ -258,7 +265,7 @@ if st.session_state.get('prediction_data') is not None:
         kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
         kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
         kombinasi_2d_list = ["".join(map(str, p)) for p in product(*result[2:])]
-        separator = "*" # PERUBAHAN DI SINI
+        separator = "*"
         text_4d, text_3d, text_2d = separator.join(kombinasi_4d_list), separator.join(kombinasi_3d_list), separator.join(kombinasi_2d_list)
         tab2d, tab3d, tab4d = st.tabs([f"2D ({len(kombinasi_2d_list)})", f"3D ({len(kombinasi_3d_list)})", f"4D ({len(kombinasi_4d_list)})"])
         with tab2d: st.text_area("Hasil 2D...", text_2d, height=150, key="txt2d"); st.download_button("Unduh 2D.txt", text_2d, key="dl2d")
@@ -276,6 +283,13 @@ if st.session_state.get('prediction_data') is not None:
             st.text_input("Kop Off", value=patterns.get('kop_off'), disabled=True, key="kop_off")
             st.text_input("Kepala Off", value=patterns.get('kepala_off'), disabled=True, key="kep_off")
             st.text_input("Ekor Off", value=patterns.get('ekor_off'), disabled=True, key="ekor_off")
+            
+            # === PENAMBAHAN TAMPILAN (UI) UNTUK SUM OFF 4D ===
+            st.text_input("SUM OFF 4D", 
+                          value=", ".join(map(str, patterns.get('sum_off_4d', []))), 
+                          disabled=True, 
+                          key="sum_off_4d")
+            # === SELESAI PENAMBAHAN TAMPILAN ===
             
             st.markdown("---")
             
@@ -317,11 +331,11 @@ if st.session_state.get('prediction_data') is not None:
     with col4d_2:
         st.markdown(f'<p style="background-color:#2E8B57; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">4D ON</p>', unsafe_allow_html=True)
         if patterns_on_off:
-            st.text_area("_4d_on_display", value="*".join(patterns_on_off['on']), height=180, key="4d_on_display") # PERUBAHAN DI SINI
+            st.text_area("_4d_on_display", value="*".join(patterns_on_off['on']), height=180, key="4d_on_display")
     with col4d_3:
         st.markdown(f'<p style="background-color:#B22222; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">4D OFF</p>', unsafe_allow_html=True)
         if patterns_on_off:
-            st.text_area("_4d_off_display", value="*".join(patterns_on_off['off']), height=180, key="4d_off_display") # PERUBAHAN DI SINI
+            st.text_area("_4d_off_display", value="*".join(patterns_on_off['off']), height=180, key="4d_off_display")
 
 # TAMPILAN HASIL ANALISIS PUTARAN TERBAIK
 if st.session_state.get('putaran_results') is not None:
