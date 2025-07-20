@@ -258,7 +258,7 @@ if st.session_state.get('prediction_data') is not None:
         kombinasi_4d_list = ["".join(map(str, p)) for p in product(*result)]
         kombinasi_3d_list = ["".join(map(str, p)) for p in product(*result[1:])]
         kombinasi_2d_list = ["".join(map(str, p)) for p in product(*result[2:])]
-        separator = " * "
+        separator = "*" # PERUBAHAN DI SINI
         text_4d, text_3d, text_2d = separator.join(kombinasi_4d_list), separator.join(kombinasi_3d_list), separator.join(kombinasi_2d_list)
         tab2d, tab3d, tab4d = st.tabs([f"2D ({len(kombinasi_2d_list)})", f"3D ({len(kombinasi_3d_list)})", f"4D ({len(kombinasi_4d_list)})"])
         with tab2d: st.text_area("Hasil 2D...", text_2d, height=150, key="txt2d"); st.download_button("Unduh 2D.txt", text_2d, key="dl2d")
@@ -317,11 +317,11 @@ if st.session_state.get('prediction_data') is not None:
     with col4d_2:
         st.markdown(f'<p style="background-color:#2E8B57; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">4D ON</p>', unsafe_allow_html=True)
         if patterns_on_off:
-            st.text_area("_4d_on_display", value=" * ".join(patterns_on_off['on']), height=180, key="4d_on_display")
+            st.text_area("_4d_on_display", value="*".join(patterns_on_off['on']), height=180, key="4d_on_display") # PERUBAHAN DI SINI
     with col4d_3:
         st.markdown(f'<p style="background-color:#B22222; color:white; font-weight:bold; text-align:center; padding: 5px; border-radius: 5px 5px 0 0;">4D OFF</p>', unsafe_allow_html=True)
         if patterns_on_off:
-            st.text_area("_4d_off_display", value=" * ".join(patterns_on_off['off']), height=180, key="4d_off_display")
+            st.text_area("_4d_off_display", value="*".join(patterns_on_off['off']), height=180, key="4d_off_display") # PERUBAHAN DI SINI
 
 # TAMPILAN HASIL ANALISIS PUTARAN TERBAIK
 if st.session_state.get('putaran_results') is not None:
