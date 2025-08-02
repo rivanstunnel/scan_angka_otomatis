@@ -1,9 +1,0 @@
-streamlit
-pandas
-requests
-numpy==1.26.4
-seaborn
-matplotlib
-streamlit-lottie
-tensorflow==2.15.0
-keras==2.15.0
