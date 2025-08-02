@@ -1,9 +1,9 @@
 streamlit
 pandas
-numpy
+numpy==1.26.4
 scikit-learn
 matplotlib
 seaborn
 requests
 catboost
-tensorflow
+tensorflow==2.14.0
