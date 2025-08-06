@@ -32,7 +32,9 @@ def build_ref_model(input_dim=8):
 
 def train_and_predict_ref_model(X, y, ref_last_row):
     model = build_ref_model(input_dim=X.shape[1])
-    model.fit(X, y, epochs=30, batch_size=8, verbose=0)
+    # --- PERUBAHAN DI SINI ---
+    # batch_size diubah dari 8 (atau 0 dari error sebelumnya) menjadi 32
+    model.fit(X, y, epochs=30, batch_size=32, verbose=0)
     preds = model.predict(np.array([ref_last_row]), verbose=0)[0]
     top6 = np.argsort(preds)[::-1][:6].tolist()
     return top6, preds.tolist()
