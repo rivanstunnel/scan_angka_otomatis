@@ -37,11 +37,22 @@ st.title("Prediksi 4D - AI")
 
 DIGIT_LABELS = ["ribuan", "ratusan", "puluhan", "satuan"]
 
-# ====== Inisialisasi session_state window_per_digit ======
+# ====== Inisialisasi session_state ======
 for label in DIGIT_LABELS:
     key = f"win_{label}"
     if key not in st.session_state:
         st.session_state[key] = 7  # default value
+
+# Inisialisasi untuk menyimpan hasil prediksi
+if 'prediction_result' not in st.session_state:
+    st.session_state.prediction_result = None
+if 'prediction_probs' not in st.session_state:
+    st.session_state.prediction_probs = None
+if 'prediction_kombinasi' not in st.session_state:
+    st.session_state.prediction_kombinasi = None
+if 'prediction_method' not in st.session_state:
+    st.session_state.prediction_method = None
+
 
 # ======== Ambil Data API dan Input Manual ========
 
@@ -87,6 +98,10 @@ with col1:
                 angka_api = [d["result"] for d in data["data"] if len(d["result"]) == 4 and d["result"].isdigit()]
                 st.session_state.angka_list = angka_api
                 st.success(f"{len(angka_api)} angka berhasil diambil.")
+                # Reset hasil prediksi lama jika data baru diambil
+                st.session_state.prediction_result = None
+                st.session_state.prediction_probs = None
+                st.session_state.prediction_kombinasi = None
         except Exception as e:
             st.error(f"❌ Gagal ambil data: {e}")
 
@@ -96,7 +111,17 @@ with col2:
 with st.expander("✏️ Edit Data Angka Manual", expanded=True):
     riwayat_input = "\n".join(st.session_state.angka_list)
     riwayat_input = st.text_area("📝 1 angka per baris:", value=riwayat_input, height=300)
-    st.session_state.angka_list = [x.strip() for x in riwayat_input.splitlines() if x.strip().isdigit() and len(x.strip()) == 4]
+    
+    new_list = [x.strip() for x in riwayat_input.splitlines() if x.strip().isdigit() and len(x.strip()) == 4]
+    # Cek jika ada perubahan pada data manual
+    if st.session_state.angka_list != new_list:
+        st.session_state.angka_list = new_list
+        # Reset hasil prediksi lama jika data manual diubah
+        st.session_state.prediction_result = None
+        st.session_state.prediction_probs = None
+        st.session_state.prediction_kombinasi = None
+        st.rerun() # Refresh untuk memastikan konsistensi
+
     df = pd.DataFrame({"angka": st.session_state.angka_list})
 
 # ======== Tabs Utama ========
@@ -142,12 +167,12 @@ with tab1:
                     train_and_save_model(df, selected_lokasi, window_dict=window_per_digit, model_type=model_type)
                 st.success("✅ Semua model berhasil dilatih.")
     
+    # Tombol prediksi sekarang hanya memicu kalkulasi
     if st.button("🔮 Prediksi", use_container_width=True):
-        
         if len(df) < max(window_per_digit.values()) + 1:
-            st.warning("❌ Data tidak cukup.")
+            st.warning("❌ Data tidak cukup untuk melakukan prediksi.")
         else:
-            with st.spinner("⏳ Memproses..."):
+            with st.spinner("⏳ Memproses prediksi..."):
                 result, probs = None, None
                 if metode == "Markov":
                     result, _ = top6_markov(df)
@@ -160,72 +185,82 @@ with tab1:
                                                return_probs=True, temperature=temperature,  
                                                mode_prediksi=mode_prediksi, window_dict=window_per_digit)  
                 elif metode == "Ensemble AI + Markov":
-                    lstm_result, probs = top6_model(df, lokasi=selected_lokasi, model_type=model_type,  
-                                                    return_probs=True, temperature=temperature,  
-                                                    mode_prediksi=mode_prediksi, window_dict=window_per_digit)  
-                    markov_result, _ = top6_markov(df)  
-                    result = []  
-                    for i in range(4):  
-                        merged = lstm_result[i] + markov_result[i]  
-                        freq = {x: merged.count(x) for x in set(merged)}  
-                        top6 = sorted(freq.items(), key=lambda x: -x[1])[:6]  
-                        result.append([x[0] for x in top6])
-
-            if result:
-                st.subheader("🎯 Hasil Prediksi Top 6")
-
-                # Prepare a formatted string for a clean, aligned display
-                output_lines = []
-                labels = ["Ribuan:", "Ratusan:", "Puluhan:", "Satuan:"]
+                    # Pastikan kedua model mengembalikan hasil sebelum di-ensemble
+                    lstm_res_tuple = top6_model(df, lokasi=selected_lokasi, model_type=model_type, return_probs=True, temperature=temperature, mode_prediksi=mode_prediksi, window_dict=window_per_digit)
+                    markov_res_tuple = top6_markov(df)
+                    
+                    if lstm_res_tuple and markov_res_tuple:
+                        lstm_result, probs = lstm_res_tuple
+                        markov_result, _ = markov_res_tuple
+                        result = []
+                        for i in range(4):
+                            merged = lstm_result[i] + markov_result[i]
+                            # Menggunakan Counter untuk mendapatkan top 6 unik berdasarkan frekuensi
+                            freq = Counter(merged)
+                            top6 = [item[0] for item in freq.most_common(6)]
+                            # Fallback jika kurang dari 6
+                            while len(top6) < 6:
+                                candidate = np.random.randint(0, 9)
+                                if candidate not in top6:
+                                    top6.append(candidate)
+                            result.append(top6)
+                    else:
+                        st.error("Gagal mendapatkan hasil dari salah satu model untuk di-ensemble.")
                 
-                # Find the longest label to ensure all numbers align perfectly
-                max_label_length = max(len(s) for s in labels)
+                # Simpan hasil ke session state
+                st.session_state.prediction_result = result
+                st.session_state.prediction_probs = probs
+                st.session_state.prediction_method = metode # Simpan metode yang digunakan
 
-                for i, label_text in enumerate(labels):
-                    # Pad the label with spaces for vertical alignment
-                    padded_label = label_text.ljust(max_label_length)
-                    
-                    # Join the list of predicted numbers into a single string
-                    number_string = ", ".join(map(str, result[i]))
-                    
-                    # Add the complete, formatted line to our list
-                    output_lines.append(f"{padded_label}  {number_string}")
-
-                # Join all lines and wrap them in a markdown code block for a monospace font
-                final_output = "```\n" + "\n".join(output_lines) + "\n```"
-
-                # Display the result using a single markdown element
-                st.markdown(final_output)
-
-            if probs:
-                st.subheader("📊 Confidence Bar")
-                for i, label in enumerate(DIGIT_LABELS):
-                    st.markdown(f"**{label.upper()}**")
-                    dconf = pd.DataFrame({
-                        "Digit": [str(d) for d in result[i]],
-                        "Confidence": probs[i]
-                    }).sort_values("Confidence", ascending=True)
-                    st.bar_chart(dconf.set_index("Digit"))
-
-            if metode in ["LSTM AI", "Ensemble AI + Markov"]:
-                with st.spinner("🔢 Kombinasi 4D..."):
+                # Hitung kombinasi 4D jika relevan
+                if metode in ["LSTM AI", "Ensemble AI + Markov"] and result is not None:
                     top_komb = kombinasi_4d(df, lokasi=selected_lokasi, model_type=model_type,
                                             top_n=10, min_conf=min_conf, power=power,
                                             mode=voting_mode, window_dict=window_per_digit,
                                             mode_prediksi=mode_prediksi)
-                    st.subheader("💡 Kombinasi 4D Top")
-                    for komb, score in top_komb:
-                        st.markdown(f"`{komb}` - Confidence: `{score:.4f}`")
+                    st.session_state.prediction_kombinasi = top_komb
+                else:
+                    st.session_state.prediction_kombinasi = None
 
-    #st.subheader("📊 Evaluasi Akurasi")
-    #acc1, acc6, top1 = evaluate_lstm_accuracy_all_digits(
-    #    df, selected_lokasi, model_type=model_type, window_size=window_per_digit
-    #)
-    #for i, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
-    #    st.info(f"🎯 {label}: Top-1 = {acc1[i]:.2%}, Top-6 = {acc6[i]:.2%}")
+
+    # Tampilkan hasil dari session state (di luar blok tombol)
+    if st.session_state.prediction_result:
+        st.subheader("🎯 Hasil Prediksi Top 6")
+        result = st.session_state.prediction_result
+        
+        output_lines = []
+        labels = ["Ribuan:", "Ratusan:", "Puluhan:", "Satuan:"]
+        max_label_length = max(len(s) for s in labels)
+
+        for i, label_text in enumerate(labels):
+            padded_label = label_text.ljust(max_label_length)
+            number_string = ", ".join(map(str, result[i]))
+            output_lines.append(f"{padded_label}  {number_string}")
+
+        final_output = "```\n" + "\n".join(output_lines) + "\n```"
+        st.markdown(final_output)
+
+        probs = st.session_state.prediction_probs
+        if probs:
+            st.subheader("📊 Confidence Bar")
+            for i, label in enumerate(DIGIT_LABELS):
+                st.markdown(f"**{label.upper()}**")
+                dconf = pd.DataFrame({
+                    "Digit": [str(d) for d in result[i]],
+                    "Confidence": probs[i]
+                }).sort_values("Confidence", ascending=True)
+                st.bar_chart(dconf.set_index("Digit"))
+        
+        # Tampilkan kombinasi 4D dari session_state
+        kombinasi = st.session_state.prediction_kombinasi
+        pred_method = st.session_state.prediction_method
+        if kombinasi and pred_method in ["LSTM AI", "Ensemble AI + Markov"]:
+            st.subheader("💡 Kombinasi 4D Top")
+            for komb, score in kombinasi:
+                st.markdown(f"`{komb}` - Confidence: `{score:.4f}`")
+
 
 # ======== TAB 2 ========
-# ======== TAB 2: Scan Window Size ========
 with tab2:
     min_ws = st.number_input("🔁 Min WS", 3, 10, 4)
     max_ws = st.number_input("🔁 Max WS", 4, 20, 12)
@@ -290,10 +325,6 @@ with tab2:
         if ws:
             st.info(f"📌 {label.upper()} | WS: {ws} | Top-6: {', '.join(map(str, top6))}")
 
-    
-
-    
-
     if st.session_state.scan_in_progress:
         step = st.session_state.scan_step
         if step < len(DIGIT_LABELS):
@@ -325,8 +356,6 @@ with tab2:
         else:
             st.success("✅ Semua digit selesai diproses.")
             st.session_state.scan_in_progress = False
-
-            # Generate hasil akhir
             hasil_data = []
             for label in DIGIT_LABELS:
                 top6 = st.session_state.get(f"top6_{label}", [])
@@ -358,7 +387,6 @@ with tab2:
         except Exception as e:
             st.warning(f"Gagal tampilkan tabel: {e}")
 
-    # Tambahkan heatmap untuk setiap digit jika tersedia
     for label in DIGIT_LABELS:
         acc_df = st.session_state.get(f"acc_table_{label}")
         conf_df = st.session_state.get(f"conf_table_{label}")
@@ -409,7 +437,6 @@ with tab2:
             progress_bar.progress(1.0, text="✅ Selesai")
             st.success("🎉 Semua digit selesai diproses dengan CatBoost.")
 
-        # Tampilkan hasil
         if st.session_state.catboost_result:
             st.subheader("📊 Hasil CatBoost per Digit")
 
@@ -423,12 +450,10 @@ with tab2:
                 st.markdown(f"### 📍 {label.upper()}")
                 st.dataframe(result.round(4), use_container_width=True)
 
-                # Tampilkan WS terbaik
                 best_ws = st.session_state.catboost_best_ws.get(label)
                 if best_ws:
                     st.info(f"✅ Window Size terbaik: `{best_ws}`")
 
-                # Visualisasi bar chart
                 try:
                     fig, ax = plt.subplots(figsize=(7, 3))
                     ax.bar(result["WS"], result["Accuracy Mean"], color="skyblue")
