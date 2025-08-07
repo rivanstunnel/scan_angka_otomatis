@@ -12,27 +12,24 @@ from ai_model import (
     top6_model,
     train_and_save_model,
     kombinasi_4d,
+    evaluate_lstm_accuracy_all_digits,
+    preprocess_data,
     find_best_window_size_with_model_true,
-    # DIHAPUS: Impor tidak perlu, sudah dipanggil via fungsi lain
-    # preprocess_data,
-    # evaluate_lstm_accuracy_all_digits,
-    # build_lstm_model,
-    # build_transformer_model
+    build_lstm_model,
+    build_transformer_model
 )
 from lokasi_list import lokasi_list
-# DIHAPUS: Impor tidak digunakan
-# from user_manual import tampilkan_user_manual
+from user_manual import tampilkan_user_manual
 from ws_scan_catboost import (
-    scan_ws_catboost,
-    # DIHAPUS: Impor tidak digunakan
-    # train_temp_lstm_model,
-    # get_top6_lstm_temp,
-    # show_catboost_heatmaps
+    scan_ws_catboost,  # Pastikan file ini ada dan telah ter-import
+    train_temp_lstm_model,
+    get_top6_lstm_temp,
+    show_catboost_heatmaps
 )
 from tab3 import tab3
 from tab4 import tab4
-from tab5 import tab5 # Seharusnya ini tab6, sesuai nama variabel di bawah
-from tab6 import tab6 # Seharusnya ini tab5, sesuai nama variabel di bawah
+from tab5 import tab5
+from tab6 import tab6
 
 st.set_page_config(page_title="Prediksi AI", layout="wide")
 
@@ -45,6 +42,8 @@ for label in DIGIT_LABELS:
     key = f"win_{label}"
     if key not in st.session_state:
         st.session_state[key] = 7  # default value
+
+# ======== Ambil Data API dan Input Manual ========
 
 # ======== Sidebar Pengaturan ========
 with st.sidebar:
@@ -68,6 +67,10 @@ with st.sidebar:
         window_per_digit[label] = st.slider(
             f"{label.upper()}", 3, 30, st.session_state[f"win_{label}"], key=f"win_{label}"
         )
+
+# ======== Manajemen Model ========
+# ======== Manajemen Model (khusus metode AI) ========
+
 
 # ======== Ambil Data API ========
 if "angka_list" not in st.session_state:
@@ -97,13 +100,10 @@ with st.expander("✏️ Edit Data Angka Manual", expanded=True):
     df = pd.DataFrame({"angka": st.session_state.angka_list})
 
 # ======== Tabs Utama ========
-tab5_container, tab4_container, tab3_container, tab2, tab1 = st.tabs(["Tester", "Scan Pola", "🔮 Scan Angka", "🪟 Scan WS", "⚙️ Prediksi & Model"])
+tab5_container, tab4_container, tab3_container, tab2, tab1 = st.tabs(["Tester", "Scan Pola", "🔮 Scan Angka", "🪟 Scan Angka", "CatBoost"])
 
-# ======== TAB 1: Prediksi & Model ========
+# ======== TAB 1 ========
 with tab1:
-    # EDIT: Ganti nama tab dari CatBoost menjadi Prediksi & Model
-    
-    # Manajemen Model dipindahkan ke dalam expander
     if metode in ["LSTM AI", "Ensemble AI + Markov"]:
         with st.expander("⚙️ Manajemen Model", expanded=False):
             lokasi_id = selected_lokasi.lower().strip().replace(" ", "_")
@@ -114,11 +114,14 @@ with tab1:
                 log_path = f"training_logs/history_{lokasi_id}_{label}_{model_type}.csv"
 
                 st.markdown(f"### 📁 Model {label.upper()}")
+
+                # Status Model
                 if os.path.exists(model_path):
                     st.info(f"📂 Model {label.upper()} tersedia.")
                 else:
                     st.warning(f"⚠️ Model {label.upper()} belum tersedia.")
 
+                # Tombol horizontal: Hapus Model & Hapus Log
                 tombol_col1, tombol_col2 = st.columns([1, 1])
                 with tombol_col1:
                     if os.path.exists(model_path):
@@ -140,10 +143,11 @@ with tab1:
                 st.success("✅ Semua model berhasil dilatih.")
     
     if st.button("🔮 Prediksi", use_container_width=True):
+        
         if len(df) < max(window_per_digit.values()) + 1:
-            st.warning("❌ Data tidak cukup untuk prediksi dengan window size yang dipilih.")
+            st.warning("❌ Data tidak cukup.")
         else:
-            with st.spinner("⏳ Memproses prediksi..."):
+            with st.spinner("⏳ Memproses..."):
                 result, probs = None, None
                 if metode == "Markov":
                     result, _ = top6_markov(df)
@@ -160,62 +164,73 @@ with tab1:
                                                     return_probs=True, temperature=temperature,  
                                                     mode_prediksi=mode_prediksi, window_dict=window_per_digit)  
                     markov_result, _ = top6_markov(df)  
-                    
-                    if lstm_result and markov_result:
-                        result = []  
-                        for i in range(4):  
-                            merged = lstm_result[i] + markov_result[i]  
-                            freq = {x: merged.count(x) for x in set(merged)}  
-                            top6 = sorted(freq.items(), key=lambda item: -item[1])[:6]  
-                            result.append([item[0] for item in top6])
-                    else:
-                        st.error("Gagal mendapatkan hasil dari salah satu model untuk ensemble.")
-
+                    result = []  
+                    for i in range(4):  
+                        merged = lstm_result[i] + markov_result[i]  
+                        freq = {x: merged.count(x) for x in set(merged)}  
+                        top6 = sorted(freq.items(), key=lambda x: -x[1])[:6]  
+                        result.append([x[0] for x in top6])
 
             if result:
                 st.subheader("🎯 Hasil Prediksi Top 6")
-                cols = st.columns(4)
-                for i, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
-                    with cols[i]:
-                        st.markdown(f"**{label}:**")
-                        st.markdown(f"`{', '.join(map(str, result[i]))}`")
 
+                # Prepare a formatted string for a clean, aligned display
+                output_lines = []
+                labels = ["Ribuan:", "Ratusan:", "Puluhan:", "Satuan:"]
+                
+                # Find the longest label to ensure all numbers align perfectly
+                max_label_length = max(len(s) for s in labels)
+
+                for i, label_text in enumerate(labels):
+                    # Pad the label with spaces for vertical alignment
+                    padded_label = label_text.ljust(max_label_length)
+                    
+                    # Join the list of predicted numbers into a single string
+                    number_string = ", ".join(map(str, result[i]))
+                    
+                    # Add the complete, formatted line to our list
+                    output_lines.append(f"{padded_label}  {number_string}")
+
+                # Join all lines and wrap them in a markdown code block for a monospace font
+                final_output = "```\n" + "\n".join(output_lines) + "\n```"
+
+                # Display the result using a single markdown element
+                st.markdown(final_output)
 
             if probs:
                 st.subheader("📊 Confidence Bar")
                 for i, label in enumerate(DIGIT_LABELS):
                     st.markdown(f"**{label.upper()}**")
-                    # Pastikan result dan probs memiliki panjang yang sama
-                    if i < len(result) and i < len(probs):
-                        dconf = pd.DataFrame({
-                            "Digit": [str(d) for d in result[i]],
-                            "Confidence": probs[i]
-                        }).sort_values("Confidence", ascending=True)
-                        st.bar_chart(dconf.set_index("Digit"))
+                    dconf = pd.DataFrame({
+                        "Digit": [str(d) for d in result[i]],
+                        "Confidence": probs[i]
+                    }).sort_values("Confidence", ascending=True)
+                    st.bar_chart(dconf.set_index("Digit"))
 
-            if metode in ["LSTM AI", "Ensemble AI + Markov"] and result:
-                with st.spinner("🔢 Mencari kombinasi 4D terbaik..."):
+            if metode in ["LSTM AI", "Ensemble AI + Markov"]:
+                with st.spinner("🔢 Kombinasi 4D..."):
                     top_komb = kombinasi_4d(df, lokasi=selected_lokasi, model_type=model_type,
                                             top_n=10, min_conf=min_conf, power=power,
                                             mode=voting_mode, window_dict=window_per_digit,
                                             mode_prediksi=mode_prediksi)
-                    if top_komb:
-                        st.subheader("💡 Kombinasi 4D Teratas")
-                        for komb, score in top_komb:
-                            st.markdown(f"`{komb}` - Confidence: `{score:.4f}`")
-                    else:
-                        st.info("Tidak ada kombinasi 4D yang memenuhi kriteria.")
+                    st.subheader("💡 Kombinasi 4D Top")
+                    for komb, score in top_komb:
+                        st.markdown(f"`{komb}` - Confidence: `{score:.4f}`")
 
-# ... Sisa kode untuk TAB 2, 3, 4, 5 sama ...
-# Pastikan semua tab lainnya tetap ada di sini
+    #st.subheader("📊 Evaluasi Akurasi")
+    #acc1, acc6, top1 = evaluate_lstm_accuracy_all_digits(
+    #    df, selected_lokasi, model_type=model_type, window_size=window_per_digit
+    #)
+    #for i, label in enumerate(["Ribuan", "Ratusan", "Puluhan", "Satuan"]):
+    #    st.info(f"🎯 {label}: Top-1 = {acc1[i]:.2%}, Top-6 = {acc6[i]:.2%}")
+
+# ======== TAB 2 ========
+# ======== TAB 2: Scan Window Size ========
 with tab2:
-    min_ws = st.number_input("Min WS", 3, 10, 4)
-    max_ws = st.number_input("Max WS", 4, 20, 12)
-    min_acc_slider = st.slider("Min Akurasi (%)", 0.0, 100.0, 60.0, step=1.0)
-    min_conf_slider = st.slider("Min Confidence (%)", 0.0, 100.0, 60.0, step=1.0)
-    min_acc= min_acc_slider / 100.0
-    min_conf= min_conf_slider / 100.0
-
+    min_ws = st.number_input("🔁 Min WS", 3, 10, 4)
+    max_ws = st.number_input("🔁 Max WS", 4, 20, 12)
+    min_acc = st.slider("🌡️ Min Acc", 0.1, 2.0, 0.5, step=0.1)
+    min_conf = st.slider("🌡️ Min Conf", 0.1, 2.0, 0.5, step=0.1)
 
     if "scan_step" not in st.session_state:
         st.session_state.scan_step = 0
@@ -223,8 +238,11 @@ with tab2:
         st.session_state.scan_in_progress = False
     if "scan_results" not in st.session_state:
         st.session_state.scan_results = {}
+
     if "ws_result_table" not in st.session_state:
         st.session_state.ws_result_table = pd.DataFrame()
+    if "window_per_digit" not in st.session_state:
+        st.session_state.window_per_digit = {}
 
     for label in DIGIT_LABELS:
         st.session_state.setdefault(f"best_ws_{label}", None)
@@ -232,16 +250,19 @@ with tab2:
         st.session_state.setdefault(f"acc_table_{label}", None)
         st.session_state.setdefault(f"conf_table_{label}", None)
 
-    with st.expander("Opsi Cross Validation"):
+    with st.expander("⚙️ Opsi Cross Validation"):
         use_cv = st.checkbox("Gunakan Cross Validation", value=False, key="use_cv_toggle")
-        cv_folds = st.number_input("Jumlah Fold (K-Folds)", 2, 10, 2, step=1, key="cv_folds_input") if use_cv else None
+        if use_cv:
+            cv_folds = st.number_input("Jumlah Fold (K-Folds)", 2, 10, 2, step=1, key="cv_folds_input")
+        else:
+            cv_folds = None
 
-    with st.expander("Scan Angka Normal (Per Digit)", expanded=True):
+    with st.expander("🔍 Scan Angka Normal (Per Digit)", expanded=True):
         cols = st.columns(4)
         for idx, label in enumerate(DIGIT_LABELS):
             with cols[idx]:
-                if st.button(f"Scan {label.upper()}", use_container_width=True, key=f"btn_{label}"):
-                    with st.spinner(f"Mencari WS terbaik untuk {label.upper()}..."):
+                if st.button(f"🔍 {label.upper()}", use_container_width=True, key=f"btn_{label}"):
+                    with st.spinner(f"🔍 Mencari WS terbaik untuk {label.upper()}..."):
                         try:
                             ws, top6 = find_best_window_size_with_model_true(
                                 df, label, selected_lokasi, model_type=model_type,
@@ -249,30 +270,35 @@ with tab2:
                                 use_cv=use_cv, cv_folds=cv_folds or 2,
                                 seed=42, min_acc=min_acc, min_conf=min_conf
                             )
-                            st.session_state[f"win_{label}"] = ws  # Update slider di sidebar
+                            st.session_state.window_per_digit[label] = ws
                             st.session_state[f"best_ws_{label}"] = ws
                             st.session_state[f"top6_{label}"] = top6
-                            st.success(f"WS {label.upper()}: {ws}")
+                            st.success(f"✅ WS {label.upper()}: {ws}")
+                            st.info(f"🔢 Top-6 {label.upper()}: {', '.join(map(str, top6))}")
                         except Exception as e:
-                            st.error(f"Gagal {label.upper()}: {e}")
+                            st.error(f"❌ Gagal {label.upper()}: {e}")
         st.markdown("---")
-        if st.button("Scan Semua Digit Sekaligus", use_container_width=True):
+        if st.button("🔎 Scan Semua Digit Sekaligus", use_container_width=True):
             st.session_state.scan_step = 0
             st.session_state.scan_in_progress = True
             st.rerun()
-
-    st.markdown("### Hasil Terakhir per Digit")
+        
+    st.markdown("### 🧾 Hasil Terakhir per Digit")
     for label in DIGIT_LABELS:
         ws = st.session_state.get(f"best_ws_{label}")
         top6 = st.session_state.get(f"top6_{label}", [])
         if ws:
-            st.info(f"{label.upper()} | WS: {ws} | Top-6: {', '.join(map(str, top6))}")
+            st.info(f"📌 {label.upper()} | WS: {ws} | Top-6: {', '.join(map(str, top6))}")
+
     
+
+    
+
     if st.session_state.scan_in_progress:
         step = st.session_state.scan_step
         if step < len(DIGIT_LABELS):
             label = DIGIT_LABELS[step]
-            with st.spinner(f"Memproses {label.upper()} ({step+1}/{len(DIGIT_LABELS)})..."):
+            with st.spinner(f"🔍 Memproses {label.upper()} ({step+1}/{len(DIGIT_LABELS)})..."):
                 try:
                     ws, top6 = find_best_window_size_with_model_true(
                         df, label, selected_lokasi, model_type=model_type,
@@ -280,25 +306,143 @@ with tab2:
                         use_cv=use_cv, cv_folds=cv_folds or 2,
                         seed=42, min_acc=min_acc, min_conf=min_conf
                     )
-                    st.session_state[f"win_{label}"] = ws
+                    st.session_state.window_per_digit[label] = ws
                     st.session_state[f"best_ws_{label}"] = ws
                     st.session_state[f"top6_{label}"] = top6
+                    st.session_state.scan_results[label] = {
+                        "ws": ws,
+                        "top6": top6
+                    }
                 except Exception as e:
-                    st.error(f"Gagal proses {label.upper()}: {e}")
+                    st.session_state.scan_results[label] = {
+                        "ws": None,
+                        "top6": [],
+                        "error": str(e)
+                    }
+                    st.error(f"❌ Gagal {label.upper()}: {e}")
                 st.session_state.scan_step += 1
                 st.rerun()
         else:
-            st.success("Semua digit selesai diproses.")
+            st.success("✅ Semua digit selesai diproses.")
             st.session_state.scan_in_progress = False
 
-    with st.expander("Scan WS dengan CatBoost", expanded=False):
-        # ... Logika CatBoost tetap sama ...
-        pass
+            # Generate hasil akhir
+            hasil_data = []
+            for label in DIGIT_LABELS:
+                top6 = st.session_state.get(f"top6_{label}", [])
+                ws = st.session_state.get(f"best_ws_{label}")
+                hasil_data.append({
+                    "Digit": label.upper(),
+                    "Best WS": ws if ws else "-",
+                    "Top6": ", ".join(map(str, top6)) if top6 else "-"
+                })
+            st.session_state.ws_result_table = pd.DataFrame(hasil_data)
 
+    if not st.session_state.ws_result_table.empty:
+        st.subheader("✅ Tabel Hasil Window Size")
+        st.dataframe(st.session_state.ws_result_table)
+
+        try:
+            fig, ax = plt.subplots(figsize=(8, 2))
+            ax.axis('off')
+            tbl = ax.table(
+                cellText=st.session_state.ws_result_table.values,
+                colLabels=st.session_state.ws_result_table.columns,
+                cellLoc='center',
+                loc='center'
+            )
+            tbl.auto_set_font_size(False)
+            tbl.set_fontsize(10)
+            tbl.scale(1, 1.5)
+            st.pyplot(fig)
+        except Exception as e:
+            st.warning(f"Gagal tampilkan tabel: {e}")
+
+    # Tambahkan heatmap untuk setiap digit jika tersedia
+    for label in DIGIT_LABELS:
+        acc_df = st.session_state.get(f"acc_table_{label}")
+        conf_df = st.session_state.get(f"conf_table_{label}")
+        if acc_df is not None:
+            st.markdown(f"#### 🔥 Heatmap Akurasi - {label.upper()}")
+            fig1, ax1 = plt.subplots(figsize=(8, 1.5))
+            sns.heatmap(acc_df.T, annot=True, cmap="YlGnBu", cbar=False, ax=ax1)
+            st.pyplot(fig1)
+        if conf_df is not None:
+            st.markdown(f"#### 🔥 Heatmap Confidence - {label.upper()}")
+            fig2, ax2 = plt.subplots(figsize=(8, 1.5))
+            sns.heatmap(conf_df.T, annot=True, cmap="Oranges", cbar=False, ax=ax2)
+            st.pyplot(fig2)
+            
+    with st.expander("📈 Scan WS dengan CatBoost", expanded=False):
+        selected_digit = st.selectbox("📌 Pilih Digit", DIGIT_LABELS, key="catboost_digit")
+        min_ws_cb = st.number_input("🔁 Min WS (CatBoost)", 3, 30, 5, key="cb_min_ws")
+        max_ws_cb = st.number_input("🔁 Max WS (CatBoost)", min_ws_cb + 1, 50, 15, key="cb_max_ws")
+        folds_cb = st.slider("📂 Jumlah Fold (CV)", 2, 10, 3, key="cb_folds")
+
+        if "catboost_result" not in st.session_state:
+            st.session_state.catboost_result = {}
+        if "catboost_best_ws" not in st.session_state:
+            st.session_state.catboost_best_ws = {}
+
+        if st.button("🔍 Scan CatBoost (Semua Digit)", use_container_width=True):
+            st.subheader("⏳ Proses Scan Window Size dengan CatBoost")
+            progress_bar = st.progress(0.0, text="Memulai...")
+
+            for idx, label in enumerate(DIGIT_LABELS):
+                progress_text = f"🔄 Memproses {label.upper()} ({idx+1}/{len(DIGIT_LABELS)})..."
+                progress_bar.progress(idx / len(DIGIT_LABELS), text=progress_text)
+                try:
+                    result_df = scan_ws_catboost(df, label, min_ws=min_ws_cb, max_ws=max_ws_cb, cv_folds=folds_cb, seed=42)
+                    st.session_state.catboost_result[label] = result_df
+
+                    if not result_df.empty:
+                        best_row = result_df.loc[result_df["Accuracy Mean"].idxmax()]
+                        st.session_state.catboost_best_ws[label] = int(best_row["WS"])
+                        st.success(f"✅ {label.upper()}: WS terbaik = {int(best_row['WS'])} | Akurasi: {best_row['Accuracy Mean']:.2%}")
+                    else:
+                        st.warning(f"⚠️ Tidak ada hasil untuk {label.upper()}")
+
+                except Exception as e:
+                    st.session_state.catboost_result[label] = None
+                    st.error(f"❌ Gagal proses {label.upper()}: {e}")
+
+            progress_bar.progress(1.0, text="✅ Selesai")
+            st.success("🎉 Semua digit selesai diproses dengan CatBoost.")
+
+        # Tampilkan hasil
+        if st.session_state.catboost_result:
+            st.subheader("📊 Hasil CatBoost per Digit")
+
+            for label in DIGIT_LABELS:
+                result = st.session_state.catboost_result.get(label)
+
+                if result is None or isinstance(result, str):
+                    st.error(f"❌ {label.upper()}: Gagal atau kosong")
+                    continue
+
+                st.markdown(f"### 📍 {label.upper()}")
+                st.dataframe(result.round(4), use_container_width=True)
+
+                # Tampilkan WS terbaik
+                best_ws = st.session_state.catboost_best_ws.get(label)
+                if best_ws:
+                    st.info(f"✅ Window Size terbaik: `{best_ws}`")
+
+                # Visualisasi bar chart
+                try:
+                    fig, ax = plt.subplots(figsize=(7, 3))
+                    ax.bar(result["WS"], result["Accuracy Mean"], color="skyblue")
+                    ax.set_title(f"Akurasi vs WS - {label.upper()}")
+                    ax.set_xlabel("Window Size")
+                    ax.set_ylabel("Accuracy Mean")
+                    ax.grid(axis='y', linestyle='--', alpha=0.5)
+                    st.pyplot(fig)
+                except Exception as e:
+                    st.warning(f"⚠️ Gagal visualisasi: {e}")
 
 with tab3_container:
     tab3(df, selected_lokasi)
 with tab4_container:
     tab4(df)
 with tab5_container:
-    tab6(df, selected_lokasi) # Perhatikan nama variabel dan fungsi yang dipanggil
+    tab6(df, selected_lokasi)
